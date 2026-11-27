@@ -384,8 +384,62 @@ fn completions() {
     for shell in ["bash", "zsh", "fish", "powershell"] {
         let out = env.run(&["completions", shell]).ok().out();
         assert!(
-            out.contains("tunwarden") && out.contains("show-command"),
-            "{shell}"
+            out.contains("tunwarden") && out.contains("COMPLETE"),
+            "{shell}: the script calls back into tunwarden: {out}"
         );
     }
+    // The shell's callback completes names from the config.
+    let out = env
+        .command(&["--", "tunwarden", "start", ""])
+        .env("COMPLETE", "fish")
+        .env("TUNWARDEN_CONFIG", env.config())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.lines().any(|l| l.starts_with("db\t")), "{text}");
+    assert!(text.lines().any(|l| l.starts_with("api\t")), "{text}");
+    let out = env
+        .command(&["--", "tunwarden", "start", "--group", ""])
+        .env("COMPLETE", "fish")
+        .env("TUNWARDEN_CONFIG", env.config())
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "daily");
+}
+
+#[test]
+fn man_pages_and_help_examples() {
+    let env = Env::new();
+    let dir = env.dir.path().join("man");
+    env.run(&["man", dir.to_str().unwrap()]).ok();
+    for page in ["tunwarden.1", "tunwarden-start.1", "tunwarden-login.1"] {
+        assert!(dir.join(page).is_file(), "{page}");
+    }
+    let help = env.run(&["start", "--help"]).ok().out();
+    assert!(help.contains("tunwarden start --group daily"), "{help}");
+}
+
+#[test]
+fn missing_names_without_a_terminal_list_the_choices() {
+    // Pickers only appear on a terminal; scripts get an error with the choices.
+    let env = Env::new();
+    let r = env.run(&["logs"]);
+    r.fails();
+    assert!(r.err().contains("error: name a tunnel"), "{}", r.err());
+    assert!(
+        r.err().contains("hint: configured tunnels: db, api"),
+        "{}",
+        r.err()
+    );
+    let r = env.run(&["add"]);
+    r.fails();
+    assert!(
+        r.err().contains("error: name the new tunnel"),
+        "{}",
+        r.err()
+    );
+    assert!(
+        !r.out().contains('\u{1b}') && !r.err().contains('\u{1b}'),
+        "no colour codes in pipes"
+    );
 }

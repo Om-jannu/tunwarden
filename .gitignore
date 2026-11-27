@@ -9,4 +9,3 @@ apps/desktop/dist/
 
 # Never commit a real config (PRD section 10)
 config.toml
-!examples/config.toml

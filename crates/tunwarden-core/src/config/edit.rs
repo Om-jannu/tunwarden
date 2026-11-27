@@ -15,6 +15,10 @@ pub enum EditError {
     Syntax(String),
     #[error("no tunnel named \"{0}\" in the config file")]
     UnknownTunnel(String),
+    #[error("no {0} named \"{1}\" in the config file")]
+    Unknown(&'static str, String),
+    #[error("the {0} \"{1}\" is used by {2}; change or remove them first")]
+    InUse(&'static str, String, String),
     #[error("a {0} named \"{1}\" already exists")]
     Exists(&'static str, String),
     #[error("`{field}`: {problem}")]
@@ -124,6 +128,74 @@ pub fn edit_tunnel(
     unset: &[String],
 ) -> Result<(), EditError> {
     let index = find(doc, name).ok_or_else(|| EditError::UnknownTunnel(name.to_owned()))?;
+    set_fields(doc, "tunnels", index, set, unset)
+}
+
+/// What one entry of `table` is called in messages.
+fn entry_kind(table: &str) -> &'static str {
+    match table {
+        "logins" => "login",
+        "profiles" => "profile",
+        _ => "tunnel",
+    }
+}
+
+/// Sets and removes fields of the `[[logins]]` or `[[profiles]]` entry `name`.
+pub fn edit_entry(
+    doc: &mut DocumentMut,
+    table: &str,
+    name: &str,
+    set: &serde_json::Map<String, Json>,
+    unset: &[String],
+) -> Result<(), EditError> {
+    let index = find_in(doc, table, name)
+        .ok_or_else(|| EditError::Unknown(entry_kind(table), name.to_owned()))?;
+    set_fields(doc, table, index, set, unset)
+}
+
+/// Removes the `[[logins]]` or `[[profiles]]` entry `name`. A profile still
+/// used by a tunnel, or a login still used by a profile, is refused.
+pub fn remove_entry(doc: &mut DocumentMut, table: &str, name: &str) -> Result<(), EditError> {
+    let kind = entry_kind(table);
+    let index =
+        find_in(doc, table, name).ok_or_else(|| EditError::Unknown(kind, name.to_owned()))?;
+    let (users_table, field) = match table {
+        "profiles" => ("tunnels", "profile"),
+        _ => ("profiles", "login"),
+    };
+    let users: Vec<String> = doc
+        .get(users_table)
+        .and_then(Item::as_array_of_tables)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter(|e| e.get(field).and_then(Item::as_str) == Some(name))
+                .filter_map(|e| e.get("name").and_then(Item::as_str).map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    if !users.is_empty() {
+        let who = format!("{} {}", entry_kind(users_table), users.join(", "));
+        return Err(EditError::InUse(kind, name.to_owned(), who));
+    }
+    let entries = doc
+        .get_mut(table)
+        .and_then(Item::as_array_of_tables_mut)
+        .expect("found above");
+    entries.remove(index);
+    if entries.is_empty() {
+        doc.remove(table);
+    }
+    Ok(())
+}
+
+fn set_fields(
+    doc: &mut DocumentMut,
+    table_name: &str,
+    index: usize,
+    set: &serde_json::Map<String, Json>,
+    unset: &[String],
+) -> Result<(), EditError> {
     if let Some(key) = set.keys().chain(unset).find(|k| k.as_str() == "name") {
         return Err(EditError::Protected(key.clone()));
     }
@@ -131,7 +203,9 @@ pub fn edit_tunnel(
     for (key, v) in set {
         values.push((key.clone(), to_toml(key, v)?));
     }
-    let table = tunnels_mut(doc)
+    let table = doc
+        .get_mut(table_name)
+        .and_then(Item::as_array_of_tables_mut)
         .and_then(|t| t.get_mut(index))
         .expect("found above");
     for key in unset {
@@ -170,7 +244,11 @@ fn tunnels_mut(doc: &mut DocumentMut) -> Option<&mut ArrayOfTables> {
 }
 
 fn find(doc: &DocumentMut, name: &str) -> Option<usize> {
-    doc.get("tunnels")?
+    find_in(doc, "tunnels", name)
+}
+
+fn find_in(doc: &DocumentMut, table: &str, name: &str) -> Option<usize> {
+    doc.get(table)?
         .as_array_of_tables()?
         .iter()
         .position(|t| t.get("name").and_then(Item::as_str) == Some(name))
@@ -336,5 +414,56 @@ command = \"y\"
             Err(EditError::Value { .. })
         ));
         assert!(matches!(parse("version = \n"), Err(EditError::Syntax(_))));
+    }
+
+    #[test]
+    fn profiles_and_logins_are_edited_in_place_and_removed_when_unused() {
+        let src = "version = 1\n\
+                   [[logins]]\nname = \"google\"\ncheck = \"gcloud x\"  # keep me\n\
+                   [[profiles]]\nname = \"staging\"\nlogin = \"google\"\n\
+                   [[profiles]]\nname = \"spare\"\n\
+                   [[tunnels]]\nname = \"db\"\nprofile = \"staging\"\ncommand = \"x\"\n";
+        let mut doc = parse(src).unwrap();
+        let mut set = serde_json::Map::new();
+        set.insert("check".into(), json!("gcloud y"));
+        set.insert("expired".into(), json!(["Reauthentication failed"]));
+        edit_entry(&mut doc, "logins", "google", &set, &[]).unwrap();
+        let text = doc.to_string();
+        assert!(text.contains("check = \"gcloud y\"  # keep me"), "{text}");
+        assert!(
+            text.contains("expired = [\"Reauthentication failed\"]"),
+            "{text}"
+        );
+
+        let mut set = serde_json::Map::new();
+        set.insert("production".into(), json!(true));
+        edit_entry(&mut doc, "profiles", "staging", &set, &["login".into()]).unwrap();
+        assert!(
+            doc.to_string()
+                .contains("[[profiles]]\nname = \"staging\"\nproduction = true\n")
+        );
+
+        assert_eq!(
+            remove_entry(&mut doc, "profiles", "staging")
+                .unwrap_err()
+                .to_string(),
+            "the profile \"staging\" is used by tunnel db; change or remove them first"
+        );
+        remove_entry(&mut doc, "profiles", "spare").unwrap();
+        assert!(!doc.to_string().contains("spare"));
+        assert_eq!(
+            edit_entry(&mut doc, "logins", "nope", &serde_json::Map::new(), &[]).unwrap_err(),
+            EditError::Unknown("login", "nope".into())
+        );
+        assert!(matches!(
+            edit_entry(&mut doc, "logins", "google", &set_name(), &[]),
+            Err(EditError::Protected(_))
+        ));
+    }
+
+    fn set_name() -> serde_json::Map<String, Json> {
+        let mut m = serde_json::Map::new();
+        m.insert("name".into(), json!("other"));
+        m
     }
 }

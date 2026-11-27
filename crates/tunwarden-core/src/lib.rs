@@ -1,10 +1,12 @@
 //! Core library for Tunwarden: config, tunnel types, supervisor, daemon and
-//! protocol. Contains no UI code. See `docs/design.md`.
+//! protocol. Contains no UI code. See `docs/technical-design.md`.
 
 pub mod auth;
+pub mod autostart;
 pub mod client;
 pub mod config;
 pub mod daemon;
+pub mod doctor;
 pub mod failure;
 pub mod fsutil;
 pub mod import;
@@ -17,6 +19,7 @@ pub mod process;
 pub mod proto;
 pub mod state;
 pub mod supervisor;
+pub mod system;
 pub mod tools;
 pub mod types;
 

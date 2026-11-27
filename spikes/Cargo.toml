@@ -1,4 +1,4 @@
-# Throwaway experiments for docs/design.md section 12. Not part of the main workspace.
+# Throwaway experiments for docs/technical-design.md section 12. Not part of the main workspace.
 [package]
 name = "tunwarden-spikes"
 version = "0.0.0"

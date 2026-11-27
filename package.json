@@ -1,0 +1,9 @@
+{
+  "name": "tunwarden-workspace",
+  "private": true,
+  "packageManager": "pnpm@12.23.0",
+  "scripts": {
+    "desktop": "pnpm --filter tunwarden-desktop tauri dev",
+    "desktop:build": "pnpm --filter tunwarden-desktop bundle"
+  }
+}

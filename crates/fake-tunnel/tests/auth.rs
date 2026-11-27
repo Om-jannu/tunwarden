@@ -137,6 +137,7 @@ impl Setup {
             state_dir: self.state(),
             handle_signals: false,
             auth_interval: Some(interval),
+            system_events: None,
         }))
     }
 

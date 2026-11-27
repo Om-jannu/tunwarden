@@ -138,14 +138,17 @@ fn last_lines(path: &Path, n: usize) -> io::Result<Vec<String>> {
 
 /// A state change, for the activity view (FR-30).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ActivityEvent {
     pub time: String,
     pub tunnel: String,
     pub from: State,
     pub to: State,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional, type = "FailureReason"))]
     pub reason: Option<FailureReason>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub message: Option<String>,
 }
 

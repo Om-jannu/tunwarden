@@ -5,11 +5,27 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["ssh", "tunnel", "port-forwarding", "daemon", "cli"]
+categories = ["command-line-utilities", "network-programming"]
 publish = true
 description = "Cross-platform manager that keeps SSH and command-based tunnels running"
 
 [lints]
 workspace = true
+
+# `cargo binstall tunwarden-cli` downloads the release archive instead of
+# compiling. The names match what `dist` uploads to GitHub Releases.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "txz"
+
+# The Windows zip has no top-level folder.
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+bin-dir = "{ bin }{ binary-ext }"
 
 [lib]
 name = "tunwarden_cli"
@@ -21,9 +37,18 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.6.10", features = ["derive"] }
-clap_complete = "4.6.12"
+clap_complete = { version = "=4.6.12", features = ["unstable-dynamic"] }
 serde = "1.0.229"
 serde_json = "1.0.154"
 toml = "1.2.3"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time"] }
 tunwarden-core = { path = "../tunwarden-core", version = "0.1.0" }
+anstream = "1.0.0"
+anstyle = "1.0.14"
+indicatif = "0.18.6"
+dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
+comfy-table = { version = "8.0.1", features = ["custom_styling"] }
+jiff = "1.0.3"
+miette = { version = "7.6.0", features = ["fancy"] }
+clap_mangen = "0.3.4"
+human-panic = "2.0.8"

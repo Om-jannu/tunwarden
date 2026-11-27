@@ -1,0 +1,21 @@
+# Publishes tunwarden-core and tunwarden-cli to crates.io. Called by
+# release.yml (dist `publish-jobs`), which skips it for prereleases.
+# Needs the CARGO_REGISTRY_TOKEN secret.
+name: Publish crates
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  crates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Publish in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --workspace --locked

@@ -2,6 +2,11 @@
 //! tests can run exactly this code next to their fake tunnels.
 
 mod table;
+mod ui;
+
+// Print through anstream, which drops colour codes when the output is not a
+// terminal, NO_COLOR is set, or TERM=dumb.
+use anstream::{eprintln, print, println};
 
 use std::ffi::OsString;
 use std::io::{IsTerminal, Write};
@@ -10,6 +15,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant, SystemTime};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::engine::{ArgValueCandidates, CompletionCandidate};
 use serde_json::Value;
 use tunwarden_core::auth::{self as gauth, Outcome as AuthOutcome};
 use tunwarden_core::client::{Client, ClientError, Launcher};
@@ -19,9 +25,9 @@ use tunwarden_core::fsutil::parse_timestamp;
 use tunwarden_core::paths::{self, Os, SystemEnv};
 use tunwarden_core::proto::{
     ActionResult, AuthParams, AuthResult, ConfigAddEntryParams, ConfigAddParams, ConfigEditParams,
-    ConfigEditResult, ConfigRemoveParams, DoctorResult, ListResult, LogNotice, LoginView,
-    LogsParams, LogsResult, RecoveredParams, RecoveredResult, Selector, ShutdownParams,
-    StatusParams, StatusResult, SubscribeParams, TunnelInfo, TunnelView, method, notice,
+    ConfigEditResult, ConfigRemoveParams, ListResult, LogNotice, LoginView, LogsParams, LogsResult,
+    RecoveredParams, RecoveredResult, Selector, ShutdownParams, StatusParams, StatusResult,
+    SubscribeParams, TunnelInfo, TunnelView, method, notice,
 };
 use tunwarden_core::state::Desired;
 use tunwarden_core::supervisor::State;
@@ -30,8 +36,25 @@ use table::Table;
 
 /// Exit code when the daemon is not running (`daemon status`).
 const EXIT_NOT_RUNNING: u8 = 3;
+/// Exit code when the user cancels a prompt, as for Ctrl-C in a shell.
+const EXIT_CANCELLED: u8 = 130;
+
+const EXAMPLES_START: &str = "Examples:
+  tunwarden start staging-db bastion-redis
+  tunwarden start --group daily
+  tunwarden start --profile prod --yes
+  tunwarden start            pick from a list";
+const EXAMPLES_ADD: &str = "Examples:
+  tunwarden add                                   asks for each field
+  tunwarden add grafana --command \"kubectl port-forward svc/grafana 3000:80\" --forward 3000
+  tunwarden add redis --type ssh-local --set host=bastion --forward 6380:redis.internal:6379";
+const EXAMPLES_COMPLETIONS: &str = "Setup:
+  bash: echo 'source <(tunwarden completions bash)' >> ~/.bashrc
+  zsh:  echo 'source <(tunwarden completions zsh)' >> ~/.zshrc
+  fish: tunwarden completions fish > ~/.config/fish/completions/tunwarden.fish
+  PowerShell: tunwarden completions powershell | Out-String | Invoke-Expression";
 /// The example config written by `init`.
-const EXAMPLE_CONFIG: &str = include_str!("../../../examples/config.toml");
+const EXAMPLE_CONFIG: &str = include_str!("../example-config.toml");
 
 #[derive(Parser)]
 #[command(
@@ -68,14 +91,23 @@ enum Cmd {
         json: bool,
     },
     /// Start tunnels
+    #[command(after_help = EXAMPLES_START)]
     Start(Action),
     /// Stop tunnels
+    #[command(
+        after_help = "Examples:\n  tunwarden stop staging-db\n  tunwarden stop --all\n  tunwarden stop          pick from the running tunnels"
+    )]
     Stop(Action),
     /// Restart tunnels
     Restart(Action),
     /// Show a tunnel's log
+    #[command(
+        after_help = "Examples:\n  tunwarden logs staging-db -f\n  tunwarden logs staging-db -n 200 | grep -i error\n  tunwarden logs          pick a tunnel"
+    )]
     Logs {
-        name: String,
+        /// The tunnel; asks when missing
+        #[arg(add = ArgValueCandidates::new(complete_tunnels))]
+        name: Option<String>,
         /// Number of lines to show
         #[arg(short = 'n', long = "lines", default_value_t = 50)]
         lines: usize,
@@ -84,10 +116,15 @@ enum Cmd {
         follow: bool,
     },
     /// Print the command a tunnel runs
-    ShowCommand { name: String },
-    /// Add a tunnel to the config
-    Add {
+    ShowCommand {
+        #[arg(add = ArgValueCandidates::new(complete_tunnels))]
         name: String,
+    },
+    /// Add a tunnel to the config
+    #[command(after_help = EXAMPLES_ADD)]
+    Add {
+        /// The new tunnel's name; asks when missing
+        name: Option<String>,
         #[command(flatten)]
         fields: Fields,
     },
@@ -101,8 +138,14 @@ enum Cmd {
         unset: Vec<String>,
     },
     /// Remove a tunnel from the config (stops it if it runs)
-    Remove { name: String },
+    Remove {
+        #[arg(add = ArgValueCandidates::new(complete_tunnels))]
+        name: String,
+    },
     /// Turn pasted tunnel commands or aliases into config entries
+    #[command(
+        after_help = "Examples:\n  tunwarden import ~/.zshrc            preview the entries\n  tunwarden import ~/.zshrc --write    pick which ones to add\n  pbpaste | tunwarden import"
+    )]
     Import {
         /// File to read; standard input if missing or `-`
         file: Option<PathBuf>,
@@ -120,38 +163,51 @@ enum Cmd {
     /// Check logins (runs each login's `check` command)
     Auth {
         /// A login, or a profile meaning its login; all logins if missing
+        #[arg(add = ArgValueCandidates::new(complete_logins))]
         name: Option<String>,
         /// Print JSON
         #[arg(long)]
         json: bool,
     },
     /// Run a login's `login` command, then restart the tunnels waiting for it
+    #[command(
+        after_help = "Examples:\n  tunwarden login google\n  tunwarden login staging   a profile means its login\n  tunwarden login           pick a login"
+    )]
     Login {
-        /// A login, or a profile meaning its login
-        name: String,
+        /// A login, or a profile meaning its login; asks when missing
+        #[arg(add = ArgValueCandidates::new(complete_logins))]
+        name: Option<String>,
     },
-    /// Print a shell completion script
+    /// Print a shell completion script; completes your tunnel, group, profile and login names
+    #[command(after_help = EXAMPLES_COMPLETIONS)]
     Completions {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Write man pages for every command to DIR
+    #[command(hide = true)]
+    Man { dir: PathBuf },
     /// Manage the background daemon that owns all tunnels
     #[command(subcommand)]
     Daemon(DaemonCommand),
+    /// Start the daemon at login, so tunnels come back after a reboot
+    #[command(subcommand)]
+    Autostart(AutostartCommand),
 }
 
 #[derive(Args)]
 struct Action {
-    /// Tunnel names
+    /// Tunnel names; asks when none are given and no --all, --group or --profile
+    #[arg(add = ArgValueCandidates::new(complete_tunnels))]
     names: Vec<String>,
     /// All tunnels
     #[arg(long)]
     all: bool,
     /// The tunnels in a group
-    #[arg(long)]
+    #[arg(long, add = ArgValueCandidates::new(complete_groups))]
     group: Option<String>,
     /// The tunnels of a profile
-    #[arg(long)]
+    #[arg(long, add = ArgValueCandidates::new(complete_profiles))]
     profile: Option<String>,
     /// Start production tunnels without asking
     #[arg(long, short = 'y')]
@@ -191,6 +247,16 @@ enum DaemonCommand {
     Status,
 }
 
+#[derive(Subcommand)]
+enum AutostartCommand {
+    /// Start the daemon at every login (launchd, systemd user unit, or the Windows Run key)
+    Enable,
+    /// Stop starting the daemon at login
+    Disable,
+    /// Show whether the daemon starts at login; exits 3 if it does not
+    Status,
+}
+
 struct Ctx {
     config: PathBuf,
     state_dir: PathBuf,
@@ -207,6 +273,15 @@ impl From<ClientError> for Failure {
         Failure {
             hint: e.hint().map(str::to_owned),
             message: e.to_string(),
+        }
+    }
+}
+
+impl From<ui::Cancelled> for Failure {
+    fn from(_: ui::Cancelled) -> Failure {
+        Failure {
+            message: "cancelled".into(),
+            hint: None,
         }
     }
 }
@@ -228,6 +303,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
+    // `COMPLETE=<shell> tunwarden ...` is the shell asking for completions.
+    clap_complete::CompleteEnv::with_factory(Cli::command).complete();
     let cli = Cli::parse_from(args);
     let ctx = match locations(cli.config) {
         Ok(ctx) => ctx,
@@ -247,9 +324,12 @@ where
 }
 
 fn report(e: Failure) -> ExitCode {
-    eprintln!("error: {}", e.message);
+    if e.message == "cancelled" && e.hint.is_none() {
+        return ExitCode::from(EXIT_CANCELLED);
+    }
+    eprintln!("{} {}", ui::paint(ui::RED.bold(), "error:"), e.message);
     if let Some(hint) = e.hint {
-        eprintln!("hint: {hint}");
+        eprintln!("{} {hint}", ui::paint(ui::CYAN, "hint:"));
     }
     ExitCode::FAILURE
 }
@@ -282,7 +362,13 @@ async fn dispatch(ctx: &Ctx, command: Cmd) -> Outcome {
         Cmd::Trust { target } => trust(ctx, &target),
         Cmd::Doctor => doctor(ctx).await,
         Cmd::Auth { name, json } => auth(ctx, name, json).await,
-        Cmd::Login { name } => login(ctx, &name).await,
+        Cmd::Login { name } => {
+            let name = match name {
+                Some(n) => n,
+                None => pick_login(ctx)?,
+            };
+            login(ctx, &name).await
+        }
         Cmd::Status { names, json } => status(ctx, names, json).await,
         Cmd::Start(a) => action(ctx, Kind::Start, a).await,
         Cmd::Stop(a) => action(ctx, Kind::Stop, a).await,
@@ -291,17 +377,100 @@ async fn dispatch(ctx: &Ctx, command: Cmd) -> Outcome {
             name,
             lines,
             follow,
-        } => logs(ctx, &name, lines, follow).await,
+        } => {
+            let name = match name {
+                Some(n) => n,
+                None => pick_tunnel(ctx, "Show the log of")?,
+            };
+            logs(ctx, &name, lines, follow).await
+        }
         Cmd::Completions { shell } => {
-            clap_complete::generate(
-                shell,
-                &mut Cli::command(),
-                "tunwarden",
-                &mut std::io::stdout(),
-            );
+            let shells = clap_complete::env::Shells::builtins();
+            let completer = shells
+                .completer(&shell.to_string())
+                .ok_or_else(|| format!("no completions for {shell}"))?;
+            completer
+                .write_registration(
+                    "COMPLETE",
+                    "tunwarden",
+                    "tunwarden",
+                    "tunwarden",
+                    &mut std::io::stdout(),
+                )
+                .map_err(|e| format!("cannot write the script: {e}"))?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Cmd::Man { dir } => {
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+            clap_mangen::generate_to(Cli::command(), &dir)
+                .map_err(|e| format!("cannot write man pages: {e}"))?;
+            println!("wrote man pages to {}", dir.display());
             Ok(ExitCode::SUCCESS)
         }
         Cmd::Daemon(cmd) => daemon_command(ctx, cmd).await,
+        Cmd::Autostart(cmd) => autostart_command(ctx, cmd),
+    }
+}
+
+// --- Autostart (FR-15) -------------------------------------------------------
+
+fn autostart_command(ctx: &Ctx, cmd: AutostartCommand) -> Outcome {
+    use tunwarden_core::autostart;
+    match cmd {
+        AutostartCommand::Enable => {
+            let exe =
+                std::env::current_exe().map_err(|e| format!("cannot find this program: {e}"))?;
+            let entry = autostart::Entry {
+                exe,
+                config: ctx.config.clone(),
+                state_dir_override: std::env::var_os(paths::STATE_DIR_ENV)
+                    .filter(|v| !v.is_empty())
+                    .map(|_| ctx.state_dir.clone()),
+                log: ctx.state_dir.join("daemon.log"),
+                path: std::env::var_os("PATH").filter(|_| Os::current() != Os::Windows),
+                app: false,
+            };
+            let done = autostart::enable(&entry, &SystemEnv).map_err(|e| e.to_string())?;
+            println!("autostart enabled: {}", done.location);
+            println!("at login it runs: {}", done.command);
+            if entry.path.is_some() {
+                println!("it uses the PATH of this shell, so the daemon finds the same tools");
+            }
+            for note in &done.notes {
+                println!("note: {note}");
+            }
+            if let Some(w) = &done.warning {
+                eprintln!("warning: {w}");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        AutostartCommand::Disable => {
+            match autostart::disable(&SystemEnv).map_err(|e| e.to_string())? {
+                Some(location) => {
+                    println!("autostart disabled; removed {location}");
+                    println!("the daemon running now is not changed");
+                }
+                None => println!("autostart was not enabled"),
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        AutostartCommand::Status => {
+            let s = autostart::status(&SystemEnv).map_err(|e| e.to_string())?;
+            if !s.enabled {
+                println!("autostart is not enabled");
+                println!("hint: run `tunwarden autostart enable` to start the daemon at login");
+                return Ok(ExitCode::from(EXIT_NOT_RUNNING));
+            }
+            println!("autostart is enabled: {}", s.location);
+            if let Some(exe) = &s.exe {
+                println!("it starts {}", exe.display());
+            }
+            match s.problem {
+                Some(problem) => Err(problem.into()),
+                None => Ok(ExitCode::SUCCESS),
+            }
+        }
     }
 }
 
@@ -335,13 +504,27 @@ fn load(ctx: &Ctx) -> Result<Config, Failure> {
         },
         LoadError::Io { .. } => Failure::from(e.to_string()),
         LoadError::Invalid(errors) => Failure {
-            message: format!(
-                "the config file has {} problem(s):\n{errors}",
-                errors.0.len()
-            ),
+            message: config_errors_message(&ctx.config, &errors),
             hint: None,
         },
     })
+}
+
+/// The problems in the config file: drawn with the lines they are on when
+/// stderr is a terminal, one `file:line:column: ...` per line otherwise.
+fn config_errors_message(path: &std::path::Path, errors: &config::ConfigErrors) -> String {
+    let count = errors.0.len();
+    let drawn = std::io::stderr()
+        .is_terminal()
+        .then(|| ui::render_config_errors(path, errors))
+        .flatten();
+    match drawn {
+        Some(d) => format!(
+            "the config file has {count} problem(s):\n\n{}",
+            d.trim_end()
+        ),
+        None => format!("the config file has {count} problem(s):\n{errors}"),
+    }
 }
 
 fn list(ctx: &Ctx, json: bool) -> Outcome {
@@ -420,10 +603,10 @@ async fn status(ctx: &Ctx, names: Vec<String>, json: bool) -> Outcome {
         return Ok(ExitCode::SUCCESS);
     }
     for e in &result.config_errors {
-        eprintln!("config: {e}");
+        eprintln!("{} {e}", ui::paint(ui::RED, "config:"));
     }
     for n in &result.notes {
-        eprintln!("note: {n}");
+        eprintln!("{} {n}", ui::paint(ui::DIM, "note:"));
     }
     if result.tunnels.is_empty() {
         println!("no tunnels configured");
@@ -488,7 +671,7 @@ fn status_table(tunnels: &[TunnelView]) -> Table {
         };
         table.row(vec![
             t.name.clone(),
-            t.state.as_str().to_owned(),
+            ui::state(t.state),
             or_dash(t.local.join(", ")),
             t.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into()),
             or_dash(uptime),
@@ -525,7 +708,7 @@ enum Kind {
     Restart,
 }
 
-async fn action(ctx: &Ctx, kind: Kind, a: Action) -> Outcome {
+async fn action(ctx: &Ctx, kind: Kind, mut a: Action) -> Outcome {
     let mut client = if kind == Kind::Stop {
         match Client::connect(&ctx.state_dir, "cli").await {
             Ok(c) => c,
@@ -543,6 +726,53 @@ async fn action(ctx: &Ctx, kind: Kind, a: Action) -> Outcome {
         Kind::Stop => (method::STOP, "stop"),
         Kind::Restart => (method::RESTART, "restart"),
     };
+
+    // Nothing selected: pick from a list on a terminal. Otherwise the daemon
+    // answers "no tunnels selected" with the hint.
+    let nothing = a.names.is_empty() && !a.all && a.group.is_none() && a.profile.is_none();
+    if nothing && ui::interactive() {
+        let all: StatusResult = client
+            .call(method::STATUS, StatusParams { names: Vec::new() })
+            .await?;
+        let active = |t: &&TunnelView| t.state != State::Stopped;
+        let choices: Vec<&TunnelView> = match kind {
+            Kind::Stop => all.tunnels.iter().filter(active).collect(),
+            _ => all.tunnels.iter().collect(),
+        };
+        if choices.is_empty() {
+            println!(
+                "{}",
+                if kind == Kind::Stop {
+                    "no tunnels are running"
+                } else {
+                    "no tunnels are configured"
+                }
+            );
+            return Ok(ExitCode::SUCCESS);
+        }
+        let width = choices.iter().map(|t| t.name.len()).max().unwrap_or(0);
+        let items: Vec<String> = choices
+            .iter()
+            .map(|t| {
+                format!(
+                    "{:<width$}  {}  {}",
+                    t.name,
+                    ui::state_padded(t.state, 12),
+                    ui::paint(ui::DIM, t.local.join(", "))
+                )
+            })
+            .collect();
+        let checked = vec![false; items.len()];
+        let picked = ui::multi_select(&format!("Which tunnels to {verb}?"), &items, &checked)?;
+        if picked.is_empty() {
+            println!("nothing selected");
+            return Ok(ExitCode::SUCCESS);
+        }
+        a.names = picked
+            .into_iter()
+            .map(|i| choices[i].name.clone())
+            .collect();
+    }
 
     // Ask before starting production tunnels (FR-33).
     if kind != Kind::Stop && !a.yes {
@@ -589,6 +819,7 @@ async fn action(ctx: &Ctx, kind: Kind, a: Action) -> Outcome {
         }
     };
     let deadline = Instant::now() + Duration::from_secs(a.wait);
+    let progress = ui::live().then(|| Progress::new(&done.tunnels));
     let views = loop {
         let now: StatusResult = client
             .call(
@@ -598,6 +829,9 @@ async fn action(ctx: &Ctx, kind: Kind, a: Action) -> Outcome {
                 },
             )
             .await?;
+        if let Some(p) = &progress {
+            p.update(&now.tunnels, &settled);
+        }
         if now.tunnels.iter().all(settled) || Instant::now() >= deadline {
             break now.tunnels;
         }
@@ -606,6 +840,7 @@ async fn action(ctx: &Ctx, kind: Kind, a: Action) -> Outcome {
 
     let mut table = Table::new(&["NAME", "STATE", "LOCAL", "DETAIL"]);
     let mut ok = true;
+    let mut results = Vec::new();
     for t in &views {
         let good = match kind {
             Kind::Stop => t.state == State::Stopped,
@@ -621,19 +856,101 @@ async fn action(ctx: &Ctx, kind: Kind, a: Action) -> Outcome {
                 t.name
             );
         }
+        results.push((t.name.clone(), good, d.clone()));
         table.row(vec![
             t.name.clone(),
-            t.state.as_str().into(),
+            ui::state(t.state),
             or_dash(t.local.join(", ")),
             d,
         ]);
     }
-    print!("{table}");
+    // On a terminal the finished progress lines are the result; a pipe gets
+    // the table.
+    let drawn = progress.is_some_and(|p| p.finish(&views, &results));
+    if !(drawn && std::io::stdout().is_terminal()) {
+        print!("{table}");
+    }
     Ok(if ok {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
     })
+}
+
+/// One live line per tunnel on stderr while `start`, `stop` or `restart`
+/// waits, ending as `✓ name running 127.0.0.1:5433` or `✗ name failed ...`.
+struct Progress {
+    bars: Vec<(String, indicatif::ProgressBar)>,
+    width: usize,
+}
+
+impl Progress {
+    fn new(names: &[String]) -> Progress {
+        let multi =
+            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::stderr());
+        let style = indicatif::ProgressStyle::with_template("{spinner:.yellow} {msg}")
+            .expect("a valid template")
+            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ");
+        let width = names.iter().map(|n| n.len()).max().unwrap_or(0);
+        let bars = names
+            .iter()
+            .map(|n| {
+                let bar = multi.add(indicatif::ProgressBar::new_spinner());
+                bar.set_style(style.clone());
+                bar.set_message(format!("{n:<width$}  waiting"));
+                bar.enable_steady_tick(Duration::from_millis(100));
+                (n.clone(), bar)
+            })
+            .collect();
+        Progress { bars, width }
+    }
+
+    fn update(&self, views: &[TunnelView], settled: &dyn Fn(&TunnelView) -> bool) {
+        let width = self.width;
+        for (name, bar) in &self.bars {
+            if let Some(t) = views.iter().find(|t| &t.name == name)
+                && !settled(t)
+                && t.state != State::Stopped
+            {
+                bar.set_message(format!(
+                    "{name:<width$}  {}  {}",
+                    ui::state_padded(t.state, 12),
+                    ui::paint(ui::DIM, t.local.join(", "))
+                ));
+            }
+        }
+    }
+
+    /// Ends every line. Returns true when lines were drawn.
+    fn finish(self, views: &[TunnelView], results: &[(String, bool, String)]) -> bool {
+        let width = self.width;
+        let done = indicatif::ProgressStyle::with_template("{msg}").expect("a valid template");
+        for (name, bar) in &self.bars {
+            let view = views.iter().find(|t| &t.name == name);
+            let (good, detail) = results
+                .iter()
+                .find(|(n, _, _)| n == name)
+                .map(|(_, g, d)| (*g, d.as_str()))
+                .unwrap_or((false, ""));
+            let mark = if good {
+                ui::paint(ui::GREEN, "✓")
+            } else {
+                ui::paint(ui::RED, "✗")
+            };
+            let state = view
+                .map(|t| ui::state_padded(t.state, 12))
+                .unwrap_or_default();
+            let local = view.map(|t| t.local.join(", ")).unwrap_or_default();
+            let tail = if detail.is_empty() {
+                ui::paint(ui::DIM, local)
+            } else {
+                format!("{}  {detail}", ui::paint(ui::DIM, local))
+            };
+            bar.set_style(done.clone());
+            bar.finish_with_message(format!("{mark} {name:<width$}  {state}  {tail}"));
+        }
+        !self.bars.is_empty()
+    }
 }
 
 fn confirm(verb: &str, production: &[&str]) -> Result<(), Failure> {
@@ -644,11 +961,11 @@ fn confirm(verb: &str, production: &[&str]) -> Result<(), Failure> {
             hint: Some("pass --yes to confirm".into()),
         });
     }
-    eprint!("{list} belong to a production profile. {verb} anyway? [y/N] ");
-    let _ = std::io::stderr().flush();
-    let mut answer = String::new();
-    let _ = std::io::stdin().read_line(&mut answer);
-    if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+    let question = format!(
+        "{} belong to a production profile. {verb} anyway?",
+        ui::paint(ui::YELLOW.bold(), &list)
+    );
+    if ui::confirm(&question)? {
         Ok(())
     } else {
         Err(format!("{verb} cancelled").into())
@@ -665,10 +982,11 @@ async fn logs(ctx: &Ctx, name: &str, lines: usize, follow: bool) -> Outcome {
             if !config.tunnels.iter().any(|t| t.name == name) {
                 return Err(unknown_tunnel(&config, name));
             }
+            let pretty = std::io::stdout().is_terminal();
             for line in tunwarden_core::logs::tail(&path, lines)
                 .map_err(|e| format!("cannot read {}: {e}", path.display()))?
             {
-                println!("{line}");
+                println!("{}", log_line(&line, pretty));
             }
             if follow {
                 eprintln!("note: the daemon is not running, so no new lines will appear");
@@ -696,8 +1014,9 @@ async fn logs(ctx: &Ctx, name: &str, lines: usize, follow: bool) -> Outcome {
             },
         )
         .await?;
+    let pretty = std::io::stdout().is_terminal();
     for line in &past.lines {
-        println!("{line}");
+        println!("{}", log_line(line, pretty));
     }
     if !follow {
         return Ok(ExitCode::SUCCESS);
@@ -723,7 +1042,7 @@ async fn logs(ctx: &Ctx, name: &str, lines: usize, follow: bool) -> Outcome {
         if older || shown.contains(&l.line) {
             continue;
         }
-        println!("{}", l.line);
+        println!("{}", log_line(&l.line, pretty));
         let _ = std::io::stdout().flush();
     }
 }
@@ -736,7 +1055,7 @@ struct Fields {
     #[arg(long = "type", value_name = "TYPE")]
     kind: Option<String>,
     /// Profile: shared environment, production flag and login
-    #[arg(long)]
+    #[arg(long, add = ArgValueCandidates::new(complete_profiles))]
     profile: Option<String>,
     /// Group; repeat for several. Replaces the current groups when editing
     #[arg(long = "group", value_name = "GROUP")]
@@ -829,8 +1148,21 @@ fn forward(spec: &str) -> Result<Value, Failure> {
     Ok(Value::Object(m))
 }
 
-async fn add(ctx: &Ctx, name: String, fields: Fields) -> Outcome {
-    let fields = fields.to_map()?;
+async fn add(ctx: &Ctx, name: Option<String>, fields: Fields) -> Outcome {
+    let mut fields = fields.to_map()?;
+    let name = match name {
+        Some(n) => n,
+        None if ui::interactive() => ui::input("Tunnel name", false)?.trim().to_owned(),
+        None => {
+            return Err(Failure {
+                message: "name the new tunnel".into(),
+                hint: Some("for example `tunwarden add grafana --command \"...\" --forward 3000`, or run it in a terminal to be asked".into()),
+            });
+        }
+    };
+    if fields.is_empty() && ui::interactive() {
+        fields = ask_fields(ctx)?;
+    }
     let mut client = connect_or_start(ctx).await?;
     let r: ConfigEditResult = client
         .call(method::CONFIG_ADD, ConfigAddParams { name, fields })
@@ -876,294 +1208,39 @@ async fn remove(ctx: &Ctx, name: String) -> Outcome {
 
 // --- doctor (FR-36) --------------------------------------------------------------
 
-/// One line of the doctor report.
-#[derive(Clone, Copy, PartialEq)]
-enum Mark {
-    Ok,
-    Warning,
-    Problem,
-}
+use tunwarden_core::doctor::Mark;
 
-struct Report {
-    rows: Vec<(String, Mark, String, String)>,
-}
-
-impl Report {
-    fn add(
-        &mut self,
-        section: &str,
-        mark: Mark,
-        item: impl Into<String>,
-        detail: impl Into<String>,
-    ) {
-        self.rows
-            .push((section.to_owned(), mark, item.into(), detail.into()));
-    }
-
-    fn print(&self) -> bool {
-        let mut problems = false;
-        let mut section = "";
-        for (s, mark, item, detail) in &self.rows {
-            if s != section {
-                if !section.is_empty() {
-                    println!();
-                }
-                println!("{s}");
-                section = s;
+fn print_report(report: &tunwarden_core::doctor::Report) -> bool {
+    let mut section = "";
+    for row in &report.rows {
+        if row.section != section {
+            if !section.is_empty() {
+                println!();
             }
-            let label = match mark {
-                Mark::Ok => "ok",
-                Mark::Warning => "warning",
-                Mark::Problem => {
-                    problems = true;
-                    "problem"
-                }
-            };
-            let line = format!("  {label:<8} {item:<24} {detail}");
-            println!("{}", line.trim_end());
+            println!("{}", ui::paint(ui::BOLD, &row.section));
+            section = &row.section;
         }
-        problems
+        let (label, style) = match row.mark {
+            Mark::Ok => ("ok", ui::GREEN),
+            Mark::Warning => ("warning", ui::YELLOW),
+            Mark::Problem => ("problem", ui::RED),
+        };
+        let line = format!(
+            "  {} {:<24} {}",
+            ui::paint(style, format!("{label:<8}")),
+            row.item,
+            row.detail
+        );
+        println!("{}", line.trim_end());
     }
+    report.has_problems()
 }
 
 async fn doctor(ctx: &Ctx) -> Outcome {
-    let mut r = Report { rows: Vec::new() };
-
-    // Config
-    let config = match load(ctx) {
-        Ok(c) => {
-            r.add(
-                "Config",
-                Mark::Ok,
-                ctx.config.display().to_string(),
-                format!(
-                    "{} tunnels, {} profiles, {} logins",
-                    c.tunnels.len(),
-                    c.profiles.len(),
-                    c.logins.len()
-                ),
-            );
-            Some(c)
-        }
-        Err(f) => {
-            r.add(
-                "Config",
-                Mark::Problem,
-                ctx.config.display().to_string(),
-                f.message,
-            );
-            if let Some(h) = f.hint {
-                r.add("Config", Mark::Problem, "", format!("hint: {h}"));
-            }
-            None
-        }
-    };
-
-    // Daemon
-    let mut client = match Client::connect(&ctx.state_dir, "cli").await {
-        Ok(c) => {
-            let h = c.hello();
-            r.add(
-                "Daemon",
-                Mark::Ok,
-                "running",
-                format!("PID {}, version {}", h.pid, h.daemon_version),
-            );
-            Some(c)
-        }
-        Err(ClientError::NotRunning) => {
-            r.add(
-                "Daemon",
-                Mark::Ok,
-                "not running",
-                "`tunwarden start` starts it when needed",
-            );
-            None
-        }
-        Err(e) => {
-            let hint = e.hint().map(|h| format!("; {h}")).unwrap_or_default();
-            r.add("Daemon", Mark::Problem, "unreachable", format!("{e}{hint}"));
-            None
-        }
-    };
-    let mut daemon_status: Option<StatusResult> = None;
-    let mut daemon_doctor: Option<DoctorResult> = None;
-    if let Some(c) = client.as_mut() {
-        let status: StatusResult = c
-            .call(method::STATUS, StatusParams { names: Vec::new() })
-            .await?;
-        for e in &status.config_errors {
-            r.add("Daemon", Mark::Problem, "config", e.clone());
-        }
-        for n in &status.notes {
-            r.add("Daemon", Mark::Warning, "note", n.clone());
-        }
-        let d: DoctorResult = c.call(method::DOCTOR, serde_json::json!({})).await?;
-        if let Some(e) = &d.write_error {
-            r.add("Daemon", Mark::Problem, "state directory", e.clone());
-        }
-        daemon_status = Some(status);
-        daemon_doctor = Some(d);
-    }
-
-    let Some(config) = config else {
-        r.print();
-        return Ok(ExitCode::FAILURE);
-    };
-
-    // Tools: the daemon's view decides, because it starts the tunnels.
-    let mine = tunwarden_core::tools::check_all(&config).await;
-    if mine.is_empty() {
-        r.add(
-            "Tools",
-            Mark::Ok,
-            "none needed",
-            "no tunnels are configured",
-        );
-    }
-    for t in &mine {
-        let short = std::path::Path::new(&t.program)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| t.program.clone());
-        let daemon = daemon_doctor
-            .as_ref()
-            .and_then(|d| d.tools.iter().find(|x| x.program == t.program));
-        let seen = daemon.unwrap_or(t);
-        match (&seen.path, &seen.error) {
-            (Some(path), _) => {
-                let version = seen
-                    .version
-                    .clone()
-                    .map(|v| format!(", {v}"))
-                    .unwrap_or_default();
-                r.add(
-                    "Tools",
-                    Mark::Ok,
-                    &short,
-                    format!(
-                        "{path} ({}{version})",
-                        seen.source.clone().unwrap_or_default()
-                    ),
-                );
-                if let (Some(d), Some(p)) = (daemon, &t.path)
-                    && d.path.as_ref() != Some(p)
-                {
-                    r.add(
-                        "Tools",
-                        Mark::Warning,
-                        "",
-                        format!(
-                            "your shell finds {} at {p}, but the daemon uses {path}",
-                            t.program
-                        ),
-                    );
-                }
-            }
-            (None, error) => {
-                let mut detail = error.clone().unwrap_or_default();
-                if let (Some(_), Some(p)) = (daemon, &t.path) {
-                    // The macOS GUI PATH problem: the shell finds it, the daemon does not.
-                    detail = format!(
-                        "the daemon cannot find {0}, but your shell finds it at {p}; set `{0} = \"{p}\"` under [tools] in the config",
-                        t.program
-                    );
-                }
-                r.add("Tools", Mark::Problem, &short, detail);
-            }
-        }
-    }
-
-    // Logins
-    if config.logins.is_empty() {
-        r.add("Logins", Mark::Ok, "none", "no logins are configured");
-    } else {
-        let auth: AuthResult = match client.as_mut() {
-            Some(c) => c.call(method::AUTH_CHECK, AuthParams::default()).await?,
-            None => check_logins(&config, None).await?,
-        };
-        for l in &auth.logins {
-            let item = if l.profiles.is_empty() {
-                l.name.clone()
-            } else {
-                format!("{} ({})", l.name, l.profiles.join(", "))
-            };
-            let detail = l.detail.clone().unwrap_or_default();
-            match l.result.as_str() {
-                "ok" => r.add("Logins", Mark::Ok, item, detail),
-                "not checked" => r.add("Logins", Mark::Ok, item, "no check command"),
-                "expired" => r.add(
-                    "Logins",
-                    Mark::Problem,
-                    item,
-                    format!("expired; run `tunwarden login {}`", l.name),
-                ),
-                _ => r.add(
-                    "Logins",
-                    Mark::Warning,
-                    item,
-                    format!("could not check: {detail}"),
-                ),
-            }
-        }
-    }
-
-    // Ports of tunnels that are not running must be free (FR-13).
-    let running: Vec<String> = daemon_status
-        .as_ref()
-        .map(|s| {
-            s.tunnels
-                .iter()
-                .filter(|t| t.pid.is_some())
-                .map(|t| t.name.clone())
-                .collect()
-        })
-        .unwrap_or_default();
-    let snapshot = tokio::task::spawn_blocking(tunwarden_core::probe::Snapshot::take)
-        .await
-        .map_err(|e| e.to_string())?;
-    match snapshot {
-        Err(e) => r.add(
-            "Ports",
-            Mark::Warning,
-            "socket table",
-            format!("cannot read it: {e}"),
-        ),
-        Ok(snapshot) => {
-            let mut busy = 0;
-            for t in config
-                .tunnels
-                .iter()
-                .filter(|t| t.kind.listens_locally() && !running.contains(&t.name))
-            {
-                for f in &t.forwards {
-                    let addr = std::net::SocketAddr::new(f.bind, f.local_port);
-                    if let Some(h) = snapshot.holder(addr) {
-                        busy += 1;
-                        r.add(
-                            "Ports",
-                            Mark::Problem,
-                            &t.name,
-                            format!(
-                                "{addr} is in use by {} (PID {}); `tunwarden start {}` would fail",
-                                h.name, h.pid, t.name
-                            ),
-                        );
-                    }
-                }
-            }
-            if busy == 0 {
-                r.add(
-                    "Ports",
-                    Mark::Ok,
-                    "local ports",
-                    "free for every tunnel that is not running",
-                );
-            }
-        }
-    }
-
-    Ok(if r.print() {
+    let exe = std::env::current_exe().ok();
+    let report =
+        tunwarden_core::doctor::run(&ctx.config, &ctx.state_dir, "cli", exe.as_deref()).await;
+    Ok(if print_report(&report) {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
@@ -1213,8 +1290,41 @@ async fn import_cmd(ctx: &Ctx, file: Option<PathBuf>, write: bool) -> Outcome {
         );
         return Ok(ExitCode::SUCCESS);
     }
+    // From a file on a terminal: choose which entries to add.
+    let mut tunnels: Vec<_> = imported.tunnels.iter().collect();
+    let from_file = file.as_ref().is_some_and(|f| f.as_os_str() != "-");
+    if from_file && ui::interactive() {
+        let width = tunnels.iter().map(|t| t.name.len()).max().unwrap_or(0);
+        let items: Vec<String> = tunnels
+            .iter()
+            .map(|t| {
+                let what = t
+                    .fields
+                    .get("command")
+                    .or_else(|| t.fields.get("host"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let short: String = what.chars().take(60).collect();
+                format!("{:<width$}  {}", t.name, ui::paint(ui::DIM, short))
+            })
+            .collect();
+        let picked = ui::multi_select("Add which tunnels?", &items, &vec![true; items.len()])?;
+        if picked.is_empty() {
+            println!("nothing added");
+            return Ok(ExitCode::SUCCESS);
+        }
+        tunnels = picked.into_iter().map(|i| tunnels[i]).collect();
+    }
+    let used: Vec<&str> = tunnels
+        .iter()
+        .filter_map(|t| t.fields.get("profile").and_then(Value::as_str))
+        .collect();
     let mut client = connect_or_start(ctx).await?;
-    for p in &imported.profiles {
+    for p in imported
+        .profiles
+        .iter()
+        .filter(|p| used.contains(&p.name.as_str()))
+    {
         let _: ConfigEditResult = client
             .call(
                 method::CONFIG_ADD_ENTRY,
@@ -1227,7 +1337,7 @@ async fn import_cmd(ctx: &Ctx, file: Option<PathBuf>, write: bool) -> Outcome {
             .await?;
         println!("added profile {}", p.name);
     }
-    for t in &imported.tunnels {
+    for t in tunnels {
         let _: ConfigEditResult = client
             .call(
                 method::CONFIG_ADD,
@@ -1245,10 +1355,7 @@ async fn import_cmd(ctx: &Ctx, file: Option<PathBuf>, write: bool) -> Outcome {
 fn load_error(ctx: &Ctx, e: LoadError) -> Failure {
     match e {
         LoadError::Invalid(errors) => Failure {
-            message: format!(
-                "the config file has {} problem(s):\n{errors}",
-                errors.0.len()
-            ),
+            message: config_errors_message(&ctx.config, &errors),
             hint: Some(format!("fix {} first", ctx.config.display())),
         },
         other => other.to_string().into(),
@@ -1390,61 +1497,31 @@ fn trust_args(t: &tunwarden_core::types::SshTarget, strict: &str) -> Vec<String>
 
 /// The login named `name`, or the login of the profile named `name`.
 fn find_login<'c>(config: &'c Config, name: &str) -> Result<&'c Login, Failure> {
-    if let Some(l) = config.login(name) {
-        return Ok(l);
-    }
-    if let Some(p) = config.profile(name) {
-        return match p.login.as_deref().and_then(|l| config.login(l)) {
-            Some(l) => Ok(l),
-            None => Err(Failure {
-                message: format!("profile \"{name}\" has no login"),
-                hint: Some("set `login = \"NAME\"` in the profile to use one".into()),
-            }),
-        };
-    }
-    let known: Vec<&str> = config.logins.iter().map(|l| l.name.as_str()).collect();
-    Err(Failure {
-        message: format!("no login or profile named \"{name}\""),
-        hint: Some(if known.is_empty() {
-            "no logins are configured; add a [[logins]] entry".into()
-        } else {
-            format!("configured logins: {}", known.join(", "))
-        }),
+    gauth::find(config, name).map_err(|e| Failure {
+        message: e.message,
+        hint: e.hint,
     })
 }
 
 fn login_view(config: &Config, login: &Login, outcome: Option<&AuthOutcome>) -> LoginView {
-    LoginView {
-        name: login.name.clone(),
-        profiles: config
-            .profiles
-            .iter()
-            .filter(|p| p.login.as_ref() == Some(&login.name))
-            .map(|p| p.name.clone())
-            .collect(),
-        checkable: login.check.is_some(),
-        result: outcome.map_or("not checked", AuthOutcome::name).to_owned(),
-        detail: outcome.and_then(AuthOutcome::detail),
-        checked_at: outcome.map(|_| tunwarden_core::fsutil::format_timestamp_now()),
-        active_tunnels: Vec::new(),
-    }
+    gauth::view(config, login, outcome)
 }
 
 /// Checks logins directly, without a daemon.
 async fn check_logins(config: &Config, name: Option<&str>) -> Result<AuthResult, Failure> {
-    let logins: Vec<&Login> = match name {
-        Some(n) => vec![find_login(config, n)?],
-        None => config.logins.iter().collect(),
-    };
-    let mut views = Vec::new();
-    for l in logins {
-        let outcome = l
-            .check
-            .is_some()
-            .then_some(gauth::check(l, &config.tools).await);
-        views.push(login_view(config, l, outcome.as_ref()));
+    match name {
+        Some(n) => {
+            let l = find_login(config, n)?;
+            let outcome = l
+                .check
+                .is_some()
+                .then_some(gauth::check(l, &config.tools).await);
+            Ok(AuthResult {
+                logins: vec![login_view(config, l, outcome.as_ref())],
+            })
+        }
+        None => Ok(gauth::check_all(config).await),
     }
-    Ok(AuthResult { logins: views })
 }
 
 /// Checks logins through the daemon if it runs (so it acts on the result),
@@ -1472,11 +1549,24 @@ async fn auth(ctx: &Ctx, name: Option<String>, json: bool) -> Outcome {
                 _ if !l.checkable => "no check command".into(),
                 _ => l.detail.clone().unwrap_or_default(),
             };
+            let result = match l.result.as_str() {
+                "ok" => ui::paint(ui::GREEN, "ok"),
+                "expired" => ui::paint(ui::RED, "expired"),
+                "unknown" => ui::paint(ui::YELLOW, "unknown"),
+                other => ui::paint(ui::DIM, other),
+            };
+            let checked = l
+                .checked_at
+                .as_deref()
+                .and_then(parse_timestamp)
+                .and_then(|at| SystemTime::now().duration_since(at).ok())
+                .map(|d| format!(" (checked {} ago)", human_duration(d)))
+                .unwrap_or_default();
             table.row(vec![
                 l.name.clone(),
                 or_dash(l.profiles.join(", ")),
-                l.result.clone(),
-                detail,
+                result,
+                format!("{detail}{}", ui::paint(ui::DIM, checked)),
             ]);
         }
         print!("{table}");
@@ -1587,6 +1677,7 @@ async fn daemon_command(ctx: &Ctx, cmd: DaemonCommand) -> Outcome {
                 state_dir: ctx.state_dir.clone(),
                 handle_signals: true,
                 auth_interval: None,
+                system_events: None,
             };
             match daemon::run(opts).await {
                 Ok(()) => Ok(ExitCode::SUCCESS),
@@ -1694,6 +1785,240 @@ fn human_duration(d: Duration) -> String {
         3600..86400 => format!("{}h {}m", s / 3600, s % 3600 / 60),
         _ => format!("{}d {}h", s / 86400, s % 86400 / 3600),
     }
+}
+
+// --- Pickers and completions -------------------------------------------------
+
+/// The config for completions: the `TUNWARDEN_CONFIG` or default file. The
+/// `--config` flag is not visible to the completion engine.
+fn completion_config() -> Option<Config> {
+    let path = paths::config_file(None, &SystemEnv, Os::current()).ok()?;
+    config::load(&path).ok()
+}
+
+fn complete_tunnels() -> Vec<CompletionCandidate> {
+    let Some(c) = completion_config() else {
+        return Vec::new();
+    };
+    c.tunnels
+        .iter()
+        .map(|t| {
+            let info = tunnel_info(&c, t);
+            CompletionCandidate::new(&t.name).help(Some(
+                format!("{} {}", info.kind, info.local.join(", ")).into(),
+            ))
+        })
+        .collect()
+}
+
+fn complete_groups() -> Vec<CompletionCandidate> {
+    let Some(c) = completion_config() else {
+        return Vec::new();
+    };
+    let mut groups: Vec<&String> = c.tunnels.iter().flat_map(|t| &t.groups).collect();
+    groups.sort();
+    groups.dedup();
+    groups.into_iter().map(CompletionCandidate::new).collect()
+}
+
+fn complete_profiles() -> Vec<CompletionCandidate> {
+    completion_config()
+        .map(|c| {
+            c.profiles
+                .iter()
+                .map(|p| CompletionCandidate::new(&p.name))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn complete_logins() -> Vec<CompletionCandidate> {
+    completion_config()
+        .map(|c| {
+            let mut v: Vec<_> = c
+                .logins
+                .iter()
+                .map(|l| CompletionCandidate::new(&l.name).help(Some("login".into())))
+                .collect();
+            v.extend(
+                c.profiles
+                    .iter()
+                    .map(|p| CompletionCandidate::new(&p.name).help(Some("profile".into()))),
+            );
+            v
+        })
+        .unwrap_or_default()
+}
+
+/// A missing NAME: asked for on a terminal, an error with the choices otherwise.
+fn pick_tunnel(ctx: &Ctx, prompt: &str) -> Result<String, Failure> {
+    let config = load(ctx)?;
+    let names: Vec<String> = config.tunnels.iter().map(|t| t.name.clone()).collect();
+    if names.is_empty() {
+        return Err(Failure {
+            message: "no tunnels are configured".into(),
+            hint: Some("add one with `tunwarden add` or `tunwarden import`".into()),
+        });
+    }
+    if !ui::interactive() {
+        return Err(Failure {
+            message: "name a tunnel".into(),
+            hint: Some(format!("configured tunnels: {}", names.join(", "))),
+        });
+    }
+    let items: Vec<String> = config
+        .tunnels
+        .iter()
+        .map(|t| {
+            let info = tunnel_info(&config, t);
+            format!(
+                "{:<20} {}",
+                t.name,
+                ui::paint(ui::DIM, info.local.join(", "))
+            )
+        })
+        .collect();
+    let i = ui::select(prompt, &items)?;
+    Ok(names[i].clone())
+}
+
+fn pick_login(ctx: &Ctx) -> Result<String, Failure> {
+    let config = load(ctx)?;
+    if config.logins.is_empty() {
+        return Err(Failure {
+            message: "no logins are configured".into(),
+            hint: Some("add a [[logins]] entry to the config".into()),
+        });
+    }
+    let names: Vec<String> = config.logins.iter().map(|l| l.name.clone()).collect();
+    if !ui::interactive() {
+        return Err(Failure {
+            message: "name a login".into(),
+            hint: Some(format!("configured logins: {}", names.join(", "))),
+        });
+    }
+    let items: Vec<String> = config
+        .logins
+        .iter()
+        .map(|l| {
+            let view = login_view(&config, l, None);
+            format!(
+                "{:<16} {}",
+                l.name,
+                ui::paint(
+                    ui::DIM,
+                    format!("used by {}", or_dash(view.profiles.join(", ")))
+                )
+            )
+        })
+        .collect();
+    let i = ui::select("Log in to", &items)?;
+    Ok(names[i].clone())
+}
+
+/// A stored log line (`<RFC 3339 UTC> <source> <text>`), for a terminal: the
+/// time in the local time zone and the source coloured. Unchanged otherwise,
+/// so pipes get the exact stored lines.
+fn log_line(line: &str, pretty: bool) -> String {
+    if !pretty {
+        return line.to_owned();
+    }
+    let mut parts = line.splitn(3, ' ');
+    let (Some(ts), Some(source), rest) = (parts.next(), parts.next(), parts.next()) else {
+        return line.to_owned();
+    };
+    let Ok(t) = ts.parse::<jiff::Timestamp>() else {
+        return line.to_owned();
+    };
+    let local = t.to_zoned_datetime(jiff::tz::TimeZone::system());
+    let time = local.strftime("%m-%d %H:%M:%S%.3f").to_string();
+    let style = match source {
+        "err" => ui::YELLOW,
+        "tw" => ui::CYAN,
+        _ => anstyle::Style::new(),
+    };
+    format!(
+        "{} {} {}",
+        ui::paint(ui::DIM, time),
+        ui::paint(style, format!("{source:<3}")),
+        rest.unwrap_or_default()
+    )
+}
+
+/// Asks for a new tunnel's fields, one at a time (`tunwarden add` on a terminal).
+fn ask_fields(ctx: &Ctx) -> Result<serde_json::Map<String, Value>, Failure> {
+    let mut m = serde_json::Map::new();
+    let kinds = [
+        ("command", "any command that opens a local port"),
+        ("ssh-local", "SSH local forward (ssh -L)"),
+        ("ssh-remote", "SSH remote forward (ssh -R)"),
+        ("ssh-dynamic", "SOCKS proxy over SSH (ssh -D)"),
+    ];
+    let items: Vec<String> = kinds
+        .iter()
+        .map(|(k, d)| format!("{k:<12} {}", ui::paint(ui::DIM, d)))
+        .collect();
+    let kind = kinds[ui::select("Type", &items)?].0;
+    if kind != "command" {
+        m.insert("type".into(), Value::String(kind.into()));
+    }
+    let list = |text: &str| -> Vec<String> {
+        text.split([',', ' '])
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(str::to_owned)
+            .collect()
+    };
+    let forwards_prompt = match kind {
+        "command" => "Local ports it opens (comma separated; empty: ready while it runs)",
+        "ssh-local" => "Forwards as LOCAL:HOST:REMOTE_PORT (comma separated)",
+        "ssh-remote" => "Forwards as LOCAL:REMOTE_PORT (comma separated)",
+        _ => "Local SOCKS port",
+    };
+    match kind {
+        "command" => {
+            let command = ui::input("Command line", false)?;
+            m.insert("command".into(), Value::String(command));
+        }
+        _ => {
+            let host = ui::input("SSH host or alias from ~/.ssh/config", false)?;
+            m.insert("host".into(), Value::String(host.trim().into()));
+            let jump = list(&ui::input("Jump hosts (comma separated, optional)", true)?);
+            if !jump.is_empty() {
+                m.insert("jump".into(), Value::from(jump));
+            }
+        }
+    }
+    let specs = list(&ui::input(forwards_prompt, kind == "command")?);
+    if !specs.is_empty() {
+        let forwards: Result<Vec<Value>, Failure> = specs.iter().map(|f| forward(f)).collect();
+        m.insert("forwards".into(), Value::Array(forwards?));
+    }
+    if let Ok(config) = config::load(&ctx.config)
+        && !config.profiles.is_empty()
+    {
+        let mut items = vec![ui::paint(ui::DIM, "(no profile)")];
+        items.extend(config.profiles.iter().map(|p| {
+            let prod = if p.production {
+                ui::paint(ui::YELLOW, " production")
+            } else {
+                String::new()
+            };
+            format!("{}{prod}", p.name)
+        }));
+        let i = ui::select("Profile", &items)?;
+        if i > 0 {
+            m.insert(
+                "profile".into(),
+                Value::String(config.profiles[i - 1].name.clone()),
+            );
+        }
+    }
+    let groups = list(&ui::input("Groups (comma separated, optional)", true)?);
+    if !groups.is_empty() {
+        m.insert("groups".into(), Value::from(groups));
+    }
+    Ok(m)
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use crate::paths::tests::FakeEnv;
 
 const SSH_DEFAULTS: &str = "-N -T -o BatchMode=yes -o ControlMaster=no -o ControlPath=none -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3";
 
-const EXAMPLE: &str = include_str!("../../../../examples/config.toml");
+const EXAMPLE: &str = include_str!("../../../tunwarden-cli/example-config.toml");
 
 fn config(src: &str) -> Config {
     let src = format!("version = 1\n{src}");

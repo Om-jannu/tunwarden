@@ -23,6 +23,7 @@ pub const RPC_INVALID_PARAMS: i64 = -32602;
 pub const RPC_UNKNOWN_METHOD: i64 = -32601;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Request {
     pub jsonrpc: String,
     pub id: u64,
@@ -32,6 +33,7 @@ pub struct Request {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Response {
     pub jsonrpc: String,
     pub id: Option<u64>,
@@ -42,6 +44,7 @@ pub struct Response {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Notification {
     pub jsonrpc: String,
     pub method: String,
@@ -50,6 +53,7 @@ pub struct Notification {
 
 /// An error with a stable string code and a next step for the user.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[error("{message}")]
 pub struct RpcError {
     pub code: i64,
@@ -59,6 +63,7 @@ pub struct RpcError {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ErrorData {
     /// For example `unknown_tunnel` or `protocol_mismatch`.
     pub code: String,
@@ -149,6 +154,8 @@ pub mod method {
     pub const CONFIG_EDIT: &str = "config.edit";
     pub const CONFIG_REMOVE: &str = "config.remove";
     pub const CONFIG_ADD_ENTRY: &str = "config.add_entry";
+    pub const CONFIG_EDIT_ENTRY: &str = "config.edit_entry";
+    pub const CONFIG_REMOVE_ENTRY: &str = "config.remove_entry";
     pub const DOCTOR: &str = "doctor";
 }
 
@@ -160,6 +167,7 @@ pub mod notice {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Hello {
     pub protocol: u32,
     pub client: String,
@@ -167,6 +175,7 @@ pub struct Hello {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct HelloResult {
     pub protocol: u32,
     pub daemon_version: String,
@@ -177,6 +186,7 @@ pub struct HelloResult {
 
 /// Which tunnels a start, stop or restart applies to (FR-9).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Selector {
     #[serde(default)]
     pub names: Vec<String>,
@@ -193,6 +203,7 @@ pub struct Selector {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ActionResult {
     /// The tunnels the request applied to.
     pub tunnels: Vec<String>,
@@ -200,6 +211,7 @@ pub struct ActionResult {
 
 /// One tunnel as `status` shows it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TunnelView {
     pub name: String,
     #[serde(rename = "type")]
@@ -210,6 +222,7 @@ pub struct TunnelView {
     /// Local addresses, for example `127.0.0.1:5433`.
     pub local: Vec<String>,
     pub state: State,
+    #[cfg_attr(feature = "ts", ts(type = "FailureReason | null"))]
     pub reason: Option<FailureReason>,
     pub last_error: Option<String>,
     pub pid: Option<u32>,
@@ -224,12 +237,14 @@ pub struct TunnelView {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct StatusParams {
     #[serde(default)]
     pub names: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct StatusResult {
     pub tunnels: Vec<TunnelView>,
     /// Problems in the config file; the daemon keeps the last valid config (FR-5).
@@ -239,6 +254,7 @@ pub struct StatusResult {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TunnelInfo {
     pub name: String,
     #[serde(rename = "type")]
@@ -252,38 +268,45 @@ pub struct TunnelInfo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ListResult {
     pub tunnels: Vec<TunnelInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct LogsParams {
     pub name: String,
     pub lines: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct LogsResult {
     pub lines: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ActivityParams {
     pub limit: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ActivityResult {
     pub events: Vec<ActivityEvent>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SubscribeParams {
     /// `tunnels`, `activity`, or `log:<tunnel>`.
     pub topics: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ShutdownParams {
     /// Restore the running tunnels on the next start (FR-15).
     #[serde(default)]
@@ -291,6 +314,7 @@ pub struct ShutdownParams {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AuthParams {
     /// A login name, or a profile name meaning that profile's login. All
     /// logins if empty.
@@ -300,6 +324,7 @@ pub struct AuthParams {
 
 /// One login and the profiles that use it (FR-22, FR-23).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct LoginView {
     pub name: String,
     pub profiles: Vec<String>,
@@ -314,16 +339,19 @@ pub struct LoginView {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AuthResult {
     pub logins: Vec<LoginView>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RecoveredParams {
     pub login: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RecoveredResult {
     /// Tunnels that failed because of the expired login and are starting again.
     pub restarted: Vec<String>,
@@ -331,6 +359,7 @@ pub struct RecoveredResult {
 
 /// Adds a `[[logins]]` or `[[profiles]]` entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConfigAddEntryParams {
     /// `logins` or `profiles`.
     pub table: String,
@@ -342,6 +371,7 @@ pub struct ConfigAddEntryParams {
 /// Adds a tunnel. `fields` are the tunnel's config fields except `name`,
 /// for example `{"type": "ssh-local", "host": "bastion", "forwards": [...]}`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConfigAddParams {
     pub name: String,
     #[serde(default)]
@@ -350,6 +380,7 @@ pub struct ConfigAddParams {
 
 /// Changes a tunnel: `set` replaces fields, `unset` removes them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConfigEditParams {
     pub name: String,
     #[serde(default)]
@@ -359,11 +390,35 @@ pub struct ConfigEditParams {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConfigRemoveParams {
     pub name: String,
 }
 
+/// Changes a `[[logins]]` or `[[profiles]]` entry.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ConfigEditEntryParams {
+    /// `logins` or `profiles`.
+    pub table: String,
+    pub name: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "Record<string, unknown>"))]
+    pub set: serde_json::Map<String, Value>,
+    #[serde(default)]
+    pub unset: Vec<String>,
+}
+
+/// Removes a `[[logins]]` or `[[profiles]]` entry.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ConfigRemoveEntryParams {
+    pub table: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConfigEditResult {
     pub tunnel: String,
     /// `added`, `updated` or `removed`.
@@ -375,6 +430,7 @@ pub struct ConfigEditResult {
 
 /// Where a program was found and its version (FR-36, FR-46).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ToolCheck {
     pub program: String,
     pub path: Option<String>,
@@ -388,6 +444,7 @@ pub struct ToolCheck {
 /// The daemon's side of `doctor`: what it sees can differ from the shell,
 /// for example the PATH of a daemon started by the app on macOS.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DoctorResult {
     pub tools: Vec<ToolCheck>,
     /// The last error writing logs or state, if any.
@@ -396,6 +453,7 @@ pub struct DoctorResult {
 
 /// The `log` notification.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct LogNotice {
     pub tunnel: String,
     pub line: String,
@@ -445,5 +503,61 @@ mod tests {
                 ..Selector::default()
             }
         );
+    }
+}
+
+/// Writes the protocol as TypeScript for the desktop app:
+/// `cargo test -p tunwarden-core --features ts export_typescript`. CI checks
+/// that the committed file is current.
+#[cfg(all(test, feature = "ts"))]
+mod typescript {
+    use super::*;
+    use crate::state::Desired;
+    use crate::supervisor::State;
+    use ts_rs::{Config, TS};
+
+    #[test]
+    fn export_typescript() {
+        let cfg = Config::new().with_large_int("number");
+        let mut out = String::from(
+            "// Generated from crates/tunwarden-core/src/proto.rs; do not edit.\n\
+             // Regenerate: cargo test -p tunwarden-core --features ts export_typescript\n\n",
+        );
+        let reasons: Vec<String> = FailureReason::ALL
+            .iter()
+            .map(|r| format!("\"{}\"", r.as_str()))
+            .collect();
+        out.push_str(&format!(
+            "export type FailureReason = {};\n",
+            reasons.join(" | ")
+        ));
+        let decls = [
+            State::decl(&cfg),
+            Desired::decl(&cfg),
+            HelloResult::decl(&cfg),
+            Selector::decl(&cfg),
+            ActionResult::decl(&cfg),
+            TunnelView::decl(&cfg),
+            StatusResult::decl(&cfg),
+            TunnelInfo::decl(&cfg),
+            ListResult::decl(&cfg),
+            LogsResult::decl(&cfg),
+            LogNotice::decl(&cfg),
+            LoginView::decl(&cfg),
+            AuthResult::decl(&cfg),
+            RecoveredResult::decl(&cfg),
+            ConfigEditResult::decl(&cfg),
+            crate::logs::ActivityEvent::decl(&cfg),
+            ActivityResult::decl(&cfg),
+            crate::doctor::Mark::decl(&cfg),
+            crate::doctor::Row::decl(&cfg),
+            crate::doctor::Report::decl(&cfg),
+        ];
+        for d in decls {
+            out.push_str(&format!("export {d}\n"));
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../apps/desktop/src/protocol.ts");
+        std::fs::write(path, out).unwrap();
     }
 }

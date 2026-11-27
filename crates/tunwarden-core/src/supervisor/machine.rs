@@ -16,6 +16,7 @@ use crate::types::Readiness;
 /// The six visible states (FR-11).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum State {
     Stopped,
     Starting,

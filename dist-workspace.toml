@@ -1,0 +1,25 @@
+[workspace]
+members = ["cargo:."]
+
+# Release settings for dist (https://axodotdev.github.io/cargo-dist/).
+# A `vX.Y.Z` tag builds every target and creates the GitHub Release. The tag
+# must match the crate version (`v0.1.0-rc.1` needs version 0.1.0-rc.1).
+[dist]
+cargo-dist-version = "0.34.0"
+ci = "github"
+# Linux builds are static (musl), so they run on any distribution.
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "aarch64-unknown-linux-musl",
+  "x86_64-unknown-linux-musl",
+  "x86_64-pc-windows-msvc",
+]
+# First release: GitHub Releases plus the shell and PowerShell installers
+# only. npm, crates.io, Homebrew, Scoop and .deb/.rpm are prepared
+# (publish-crates.yml, release-extras.yml, packaging/) and switched on later,
+# one at a time (PRD section 10).
+installers = ["shell", "powershell"]
+install-path = "CARGO_HOME"
+install-updater = false
+pr-run-mode = "plan"

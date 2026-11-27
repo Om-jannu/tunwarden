@@ -62,6 +62,7 @@ fn in_process(s: &Setup) -> tokio::task::JoinHandle<Result<(), DaemonError>> {
         state_dir: s.state.clone(),
         handle_signals: false,
         auth_interval: None,
+        system_events: None,
     };
     tokio::spawn(daemon::run(opts))
 }
@@ -579,4 +580,162 @@ async fn no_daemon_means_not_running() {
     let e = Client::connect(&s.state, "test").await.err().unwrap();
     assert!(matches!(e, ClientError::NotRunning));
     assert_eq!(e.hint(), Some("start it with `tunwarden daemon start`"));
+}
+
+/// The daemon's PID, and the tunnel PIDs once `names` are running.
+#[cfg(unix)]
+async fn run_tunnels(s: &Setup, names: &[&str]) -> (u32, Vec<u32>) {
+    let mut c = Client::connect_or_start(&s.state, "test", &launcher(s))
+        .await
+        .unwrap();
+    let daemon_pid = c.hello().pid;
+    let _: ActionResult = c
+        .call(
+            method::START,
+            Selector {
+                names: names.iter().map(|n| n.to_string()).collect(),
+                ..Selector::default()
+            },
+        )
+        .await
+        .unwrap();
+    let ts = wait_states(&mut c, "started", |ts| {
+        ts.iter()
+            .filter(|t| names.contains(&t.name.as_str()))
+            .all(|t| t.state == State::Running)
+    })
+    .await;
+    let pids = ts.iter().filter_map(|t| t.pid).collect();
+    (daemon_pid, pids)
+}
+
+#[cfg(unix)]
+fn alive(pid: u32) -> bool {
+    nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), None).is_ok()
+        && tunwarden_core::process::start_time(pid).is_some()
+}
+
+#[cfg(unix)]
+async fn wait_gone(pid: u32, what: &str) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while alive(pid) {
+        assert!(Instant::now() < deadline, "{what} (PID {pid}) did not exit");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn logout_or_shutdown_keeps_running_tunnels_for_the_next_login() {
+    // FR-15, AC-7: at logout or shutdown, launchd and systemd send SIGTERM.
+    // The daemon stops its tunnels and keeps them marked for restore, so the
+    // daemon autostart runs at the next login brings them back.
+    use nix::sys::signal::{Signal, kill};
+    use nix::unistd::Pid;
+    let _turn = PORTS.lock().await;
+    let s = setup("");
+    let (daemon_pid, pids) = run_tunnels(&s, &["a"]).await;
+
+    kill(Pid::from_raw(daemon_pid as i32), Signal::SIGTERM).unwrap();
+    wait_gone(daemon_pid, "the daemon").await;
+    for p in &pids {
+        assert!(!alive(*p), "the daemon stopped its tunnels before exiting");
+    }
+    let state: Value =
+        serde_json::from_str(&std::fs::read_to_string(s.state.join("state.json")).unwrap())
+            .unwrap();
+    assert_eq!(state["daemon"], Value::Null, "a clean stop");
+    assert_eq!(state["tunnels"]["a"]["desired"], "running");
+    assert_ne!(
+        state["tunnels"]["b"]["desired"], "running",
+        "b was never started"
+    );
+    assert!(
+        std::fs::read_to_string(s.state.join("daemon.log"))
+            .unwrap()
+            .contains("received a stop signal; stopping tunnels and keeping them")
+    );
+
+    // The next login.
+    let mut c = start_again(&s).await;
+    let ts = wait_states(&mut c, "a restored", |ts| ts[0].state == State::Running).await;
+    assert_eq!(ts[1].state, State::Stopped);
+    assert_eq!(ts[0].note, None, "not a crash");
+    assert!(status(&mut c).await.notes.is_empty());
+    shutdown(&mut c, false).await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn power_loss_restores_tunnels_unless_restore_on_start_is_off() {
+    // FR-15: a power cut kills the daemon and every tunnel at once and leaves
+    // state.json saying the daemon runs. There is nothing to sweep.
+    use nix::sys::signal::{Signal, kill, killpg};
+    use nix::unistd::Pid;
+    let _turn = PORTS.lock().await;
+    let s = setup("--spawn-child");
+    let cut = |daemon: u32, tunnels: &[u32]| {
+        kill(Pid::from_raw(daemon as i32), Signal::SIGKILL).unwrap();
+        for p in tunnels {
+            let _ = killpg(Pid::from_raw(*p as i32), Signal::SIGKILL);
+        }
+    };
+
+    let (daemon_pid, pids) = run_tunnels(&s, &["a", "b"]).await;
+    cut(daemon_pid, &pids);
+    wait_gone(daemon_pid, "the daemon").await;
+    let mut c = start_again(&s).await;
+    let ts = wait_states(&mut c, "restored", all_in(State::Running)).await;
+    for t in &ts {
+        assert_eq!(
+            t.note.as_deref(),
+            Some("restored after the previous daemon stopped unexpectedly"),
+            "{}",
+            t.name
+        );
+    }
+    let logs: LogsResult = c
+        .call(
+            method::LOGS_TAIL,
+            LogsParams {
+                name: "a".into(),
+                lines: 100,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        !logs.lines.iter().any(|l| l.contains("removed processes")),
+        "nothing was left to sweep"
+    );
+    let pids: Vec<u32> = ts.iter().filter_map(|t| t.pid).collect();
+    let daemon_pid = c.hello().pid;
+    drop(c);
+
+    // The same with restore_on_start off: nothing starts, and each tunnel says why.
+    let text = std::fs::read_to_string(&s.config).unwrap();
+    std::fs::write(
+        &s.config,
+        text.replacen(
+            "version = 1\n",
+            "version = 1\n[settings]\nrestore_on_start = false\n",
+            1,
+        ),
+    )
+    .unwrap();
+    cut(daemon_pid, &pids);
+    wait_gone(daemon_pid, "the daemon").await;
+    let mut c = start_again(&s).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let ts = status(&mut c).await.tunnels;
+    for t in &ts {
+        assert_eq!(t.state, State::Stopped, "{}", t.name);
+        assert_eq!(
+            t.note.as_deref(),
+            Some(
+                "was running when the previous daemon stopped unexpectedly; not restored because restore_on_start is off"
+            )
+        );
+    }
+    shutdown(&mut c, false).await;
 }

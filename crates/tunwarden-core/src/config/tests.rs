@@ -5,7 +5,7 @@ use std::time::Duration;
 use super::*;
 use crate::paths::tests::FakeEnv;
 
-const EXAMPLE: &str = include_str!("../../../../examples/config.toml");
+const EXAMPLE: &str = include_str!("../../../tunwarden-cli/example-config.toml");
 
 fn env() -> FakeEnv {
     FakeEnv::with_home("/home/me")

@@ -29,7 +29,7 @@ Draft v1 used the name Burrow. The main changes in v2:
 - `gcloud-ssh` moves past v1. `custom` tunnels may now use a project. (v3 removes all gcloud types.)
 - Open questions 1–5 are closed.
 
-v2.1 adds decisions from the technical design (`docs/design.md`): the crash sweep applies to Linux as well as macOS (FR-52), the client runs the gcloud login (FR-25), `trust` hands off to ssh (FR-42), an inconclusive auth check never stops tunnels (FR-22), Windows may stop tunnels by force (FR-12), `daemon stop` no longer restores tunnels unless `--keep` is given (FR-15), and the tool lookup order (FR-36).
+v2.1 adds decisions from the technical design (`docs/technical-design.md`): the crash sweep applies to Linux as well as macOS (FR-52), the client runs the gcloud login (FR-25), `trust` hands off to ssh (FR-42), an inconclusive auth check never stops tunnels (FR-22), Windows may stop tunnels by force (FR-12), `daemon stop` no longer restores tunnels unless `--keep` is given (FR-15), and the tool lookup order (FR-36).
 
 Removed requirements keep their number and are marked as removed, so references stay valid.
 
@@ -214,7 +214,7 @@ forwards = [{ local_port = 6380, remote_host = "redis.internal", remote_port = 6
   - When `restore_on_start` is on (the default), tunnels that were running when the daemon crashed or the machine rebooted are started again.
   - `restore_on_start` governs restoring after a crash or reboot. After a clean `daemon stop --keep`, tunnels are restored regardless, because the user asked for it.
   - `tunwarden daemon stop` stops every tunnel and they stay stopped on the next daemon start. `tunwarden daemon stop --keep` stops them now but restores them on the next start. A daemon restart, an upgrade, and the OS stopping the daemon at logout or shutdown restore them like `--keep`.
-  - `tunwarden autostart enable|disable` registers the daemon to start at login (launchd agent on macOS, systemd user unit on Linux, a startup entry on Windows). This works without the desktop app installed.
+  - `tunwarden autostart enable|disable|status` registers the daemon to start at login (launchd agent on macOS, systemd user unit on Linux, the `Run` registry key on Windows). This works without the desktop app installed. The entry records the shell's `PATH` (macOS, Linux), never restarts the daemon after it exits, and takes effect at the next login without touching the running daemon.
 
 ### 7.4 Health and reconnect
 
@@ -399,7 +399,24 @@ A tunnel whose supervisor has vanished (daemon crash, reboot) must be reported a
 - On a version tag, build release artifacts and publish them to GitHub Releases.
 - Release artifacts: CLI binaries for each OS/arch; desktop installers (`.dmg`, `.exe`/`.msi`, `.AppImage` or `.deb`) with checksums.
 - The README must explain the unsigned-app warnings until signing is set up, with the current steps for each supported macOS version (Gatekeeper's "Open Anyway" in System Settings → Privacy & Security) and Windows SmartScreen ("More info" → "Run anyway").
-- Later distribution channels: Homebrew tap/cask, winget, Scoop, Flathub or AUR.
+- Hosting uses free services only, under the author's personal GitHub account (`Om-jannu`), with no GitHub org or paid domain:
+  - Repository: `github.com/Om-jannu/tunwarden`. One repository holds the Rust crates, the desktop app (`apps/desktop`) and the website (`apps/web`).
+  - Binaries and installers: GitHub Releases. Download links use `releases/latest/download/<file>`, so the website needs no change per release.
+  - Website: a Next.js static export on Vercel's free tier at `tunwarden.vercel.app`, with a landing page, a download page that detects the OS, and the docs.
+- Release tooling: `dist` (cargo-dist) builds every OS from one version tag and generates the installers.
+- Channels are added in stages, not all at once. The first release (v0.1.0) is published only on GitHub Releases, with the shell and PowerShell install scripts. The other channels below are prepared in the repository and switched on one at a time after that. Planned CLI channels:
+  - GitHub Releases: archives for macOS (Apple Silicon, Intel), Linux (x86-64, arm64; statically linked with musl, so they run on any distribution) and Windows (x86-64), with checksums;
+  - shell and PowerShell install scripts;
+  - a Homebrew tap in the author's shared tap repository (`Om-jannu/homebrew-tap`), used for all of the author's projects;
+  - a Scoop bucket in the author's shared bucket repository (`Om-jannu/scoop-bucket`);
+  - npm as the unscoped package `tunwarden` (installed with `npm i -g tunwarden`; `npx` is not recommended, because `autostart` would record a path in npx's cache);
+  - crates.io, with `cargo binstall` metadata so Rust users can install the release binary without compiling;
+  - `.deb` and `.rpm` packages attached to the GitHub Release.
+- CLI channels after one or two stable releases: winget (`microsoft/winget-pkgs`), AUR (`tunwarden-bin`), a Nix flake in the repository, and homebrew-core once the project is popular enough. mise can install from GitHub Releases without extra work.
+- Desktop app channels (M3): installers in GitHub Releases, a cask in the author's tap, and winget. The official Homebrew cask repository has required signed and notarized apps since 1 Sep 2026, and Apple signing is paid, so the app stays out of it while unsigned. Free Windows signing through SignPath Foundation (for open-source projects) is to be applied for.
+- Not used: Snap and Flathub (their sandboxes prevent running the user's ssh and cloud tools and reading `~/.ssh`), Chocolatey (covered by winget and Scoop), Docker Hub (tunnels must run on the host), and the Mac App Store.
+- On macOS, a binary downloaded in a browser is quarantined and Gatekeeper blocks it while unsigned. Installs through Homebrew, the install script or npm are not, so the download page and README point macOS users to those.
+- Discovery at launch: GitHub topics, lib.rs (automatic from crates.io), Show HN, r/rust, r/commandline, r/devops, This Week in Rust, AlternativeTo, and the awesome-rust and awesome-ssh lists.
 
 ## 11. Milestones
 
@@ -411,9 +428,9 @@ A tunnel whose supervisor has vanished (daemon crash, reboot) must be reported a
    - All CLI commands except `autostart`, plus `doctor` and the `fake-tunnel` test suite.
 
    Usable daily, replaces the zsh scripts.
-2. **M2 – Sleep, network and autostart.** Sleep/wake and network-change handling, retrying non-credential failures after wake, `autostart`, restore after reboot.
-3. **M3 – Desktop app.** Tray, dashboard, log viewer, add/edit forms, production confirmation, notifications, `doctor` panel.
-4. **M4 – Release pipeline.** Cross-platform CI, release artifacts, README and docs, public repository.
+2. **M2 – Sleep, network and autostart.** Sleep/wake and network-change handling, retrying non-credential failures after wake, `autostart`, restore after reboot. Built: wake and network changes are found by polling on every OS (design 11), a wake also checks the logins in use, and `autostart` covers launchd, systemd and the Windows `Run` key. Still to confirm on real hardware: a real sleep, a real systemd login session, and Windows.
+3. **M3 – Desktop app.** Tray, dashboard, log viewer, add/edit forms, production confirmation, notifications, `doctor` panel. Built (docs/desktop.md sections 7 to 9): the app ships the CLI, starts hidden with `--background`, runs one copy, and is packaged for all three OSes; the Windows parts are still to be checked on Windows.
+4. **M4 – Release pipeline and website.** Cross-platform CI, release artifacts and installers (section 10), README and docs, the website at `tunwarden.vercel.app`, public repository. The release setup may start before M2 so that test builds can be installed without building from source; the website is built later.
 5. **M5 – Polish.** Package-manager listings, optional code signing, deeper health checks and latency, a library of ready-made login and tunnel templates.
 
 ## 12. Acceptance criteria (v1 = M1 through M4)
@@ -470,7 +487,7 @@ Decided in v2:
 Open:
 
 1. Trademark search for "Tunwarden" in the USPTO and WIPO Global Brand Database has not been done yet. Do it before publishing.
-2. Register the domain, GitHub org and crates.io names before publishing, since availability can change.
+2. Claim the names before publishing, since availability can change: the crates.io crates, the npm package `tunwarden`, and the Vercel project `tunwarden` (for `tunwarden.vercel.app`). No domain or GitHub org is needed (section 10).
 
 ## 16. Appendix: reference prototype
 

@@ -1,0 +1,35 @@
+# .deb and .rpm packages for the CLI, built from the release binaries by
+# packaging/linux-packages.sh, which runs nfpm in a directory holding this
+# file, the binary and the docs. ARCH (amd64 or arm64) and VERSION come from
+# the environment.
+name: tunwarden
+arch: "${ARCH}"
+platform: linux
+version: "${VERSION}"
+section: net
+priority: optional
+maintainer: "Om Jannu <https://github.com/Om-jannu>"
+vendor: Om Jannu
+homepage: https://github.com/Om-jannu/tunwarden
+license: MIT OR Apache-2.0
+description: |
+  Keeps SSH forwards and any command that opens a local port running,
+  reconnects them, keeps logs, and handles expired logins.
+contents:
+  - src: ./tunwarden
+    dst: /usr/bin/tunwarden
+    file_info:
+      mode: 0755
+  - src: ./LICENSE-MIT
+    dst: /usr/share/doc/tunwarden/LICENSE-MIT
+  - src: ./LICENSE-APACHE
+    dst: /usr/share/doc/tunwarden/LICENSE-APACHE
+  - src: ./README.md
+    dst: /usr/share/doc/tunwarden/README.md
+overrides:
+  deb:
+    recommends:
+      - openssh-client
+  rpm:
+    recommends:
+      - openssh-clients

@@ -150,6 +150,73 @@ pub fn login_command(login: &Login, program: &std::path::Path) -> Option<std::pr
     Some(cmd)
 }
 
+/// A login that cannot be found, with what to do instead.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LookupError {
+    pub message: String,
+    pub hint: Option<String>,
+}
+
+/// The login named `name`, or the login of the profile named `name`.
+pub fn find<'c>(config: &'c crate::config::Config, name: &str) -> Result<&'c Login, LookupError> {
+    if let Some(l) = config.login(name) {
+        return Ok(l);
+    }
+    if let Some(p) = config.profile(name) {
+        return match p.login.as_deref().and_then(|l| config.login(l)) {
+            Some(l) => Ok(l),
+            None => Err(LookupError {
+                message: format!("profile \"{name}\" has no login"),
+                hint: Some("set `login = \"NAME\"` in the profile to use one".into()),
+            }),
+        };
+    }
+    let known: Vec<&str> = config.logins.iter().map(|l| l.name.as_str()).collect();
+    Err(LookupError {
+        message: format!("no login or profile named \"{name}\""),
+        hint: Some(if known.is_empty() {
+            "no logins are configured; add a [[logins]] entry".into()
+        } else {
+            format!("configured logins: {}", known.join(", "))
+        }),
+    })
+}
+
+/// A login as `auth` shows it, with the profiles that use it.
+pub fn view(
+    config: &crate::config::Config,
+    login: &Login,
+    outcome: Option<&Outcome>,
+) -> crate::proto::LoginView {
+    crate::proto::LoginView {
+        name: login.name.clone(),
+        profiles: config
+            .profiles
+            .iter()
+            .filter(|p| p.login.as_ref() == Some(&login.name))
+            .map(|p| p.name.clone())
+            .collect(),
+        checkable: login.check.is_some(),
+        result: outcome.map_or("not checked", Outcome::name).to_owned(),
+        detail: outcome.and_then(Outcome::detail),
+        checked_at: outcome.map(|_| crate::fsutil::format_timestamp_now()),
+        active_tunnels: Vec::new(),
+    }
+}
+
+/// Checks every login with a `check` command, without a daemon.
+pub async fn check_all(config: &crate::config::Config) -> crate::proto::AuthResult {
+    let mut logins = Vec::new();
+    for l in &config.logins {
+        let outcome = match l.check {
+            Some(_) => Some(check(l, &config.tools).await),
+            None => None,
+        };
+        logins.push(view(config, l, outcome.as_ref()));
+    }
+    crate::proto::AuthResult { logins }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,6 +1,6 @@
 # Spike results (M1)
 
-Date: 26 Nov 2026 · Code: `spikes/` (throwaway, not part of the workspace) · Design: `docs/design.md` section 12
+Date: 26 Nov 2026 · Code: `spikes/` (throwaway, not part of the workspace) · Design: `docs/technical-design.md` section 12
 
 | Spike | Status | Ran on |
 | --- | --- | --- |

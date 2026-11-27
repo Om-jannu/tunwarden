@@ -6,7 +6,7 @@ Draft 2 makes Tunwarden generic (PRD Draft v3): profiles and logins replace gclo
 
 This document covers how to build what the [PRD](../PRD%20Tunwarden%20–%20Tunnel%20Manager.md) asks for, and only the decisions that are expensive to change later. The PRD stays the source of truth for behavior. Where this document refines the PRD, section 13 lists the change so the PRD can be updated.
 
-The desktop app (M3) is a thin client of the daemon protocol in section 5 and gets its own short design at the start of M3. Sleep/wake and network detection (M2) are sketched in section 11.
+The desktop app (M3) is a thin client of the daemon protocol in section 5 and gets its own short design at the start of M3. Sleep/wake and network detection (M2) are in section 11.
 
 ## 1. Workspace layout
 
@@ -19,6 +19,7 @@ tunwarden/
     tunwarden-cli/        `tunwarden` binary: CLI commands and `tunwarden daemon run`
     fake-tunnel/          test helper binary (section 10)
   apps/desktop/           Tauri 2 + React app (M3)
+  apps/web/               Next.js website, static export on Vercel (M4)
   docs/
 ```
 
@@ -39,6 +40,7 @@ Modules in `tunwarden-core`:
 | `daemon` | Control server, registry of supervisors, config watcher |
 | `client` | Connect, handshake, start the daemon on demand |
 | `tools` | Locating ssh and the config's commands; `doctor` checks |
+| `system` | Wake-from-sleep and network-change detection (M2) |
 
 `tunwarden-core` has no UI code and no `println!`. The CLI and the app format output themselves.
 
@@ -353,6 +355,24 @@ The `proto` module defines these messages as Rust types with serde. The CLI's `-
 - **`logs -f`** subscribes before reading the tail, then skips lines already shown or older than the newest one shown, so nothing is missed or printed twice.
 - **Exit codes.** 0 on success, 1 on any failure, 2 for usage errors (clap), and 3 from `daemon status` when the daemon is not running.
 
+### 5.5a How the CLI looks and asks (as implemented)
+
+All output goes through `anstream`, which drops colour codes when the stream is not a terminal, `NO_COLOR` is set or `TERM=dumb`, so styled text costs nothing in pipes. Anything that asks or animates only runs when stdin and stderr are terminals and `CI` is unset (`ui::interactive`, `ui::live`).
+
+| Crate | Used for |
+| --- | --- |
+| `anstream`, `anstyle` | Colour: states (green running, amber starting/reconnecting/unhealthy, red failed, dim stopped), `error:` and `hint:`, doctor marks |
+| `indicatif` | One live line per tunnel on stderr while `start`, `stop` and `restart` wait, ending as `✓`/`✗` with the state and detail; on a terminal those lines replace the result table |
+| `dialoguer` | Pickers when a name is missing (`start`, `stop`, `restart`, `logs`, `login`), production confirmation, choosing entries in `import FILE --write`, and a guided `add` |
+| `comfy-table` | Borderless tables that wrap to the terminal width (60 columns or more); never wrapped in pipes |
+| `jiff` | Log timestamps in local time on a terminal; pipes get the stored UTC lines unchanged |
+| `miette` | Config errors drawn with the offending line underlined, on a terminal; `file:line:column: field: message` otherwise |
+| `clap_complete` (`unstable-dynamic`, pinned `=4.6.12`) | `tunwarden completions SHELL` prints a script that calls back into `tunwarden`, which completes tunnel, group, profile and login names from the `TUNWARDEN_CONFIG` or default config |
+| `clap_mangen` | `tunwarden man DIR` (hidden) writes man pages for packaging |
+| `human-panic` | A crash prints a short message and saves a report (release builds) |
+
+Without a terminal, a missing name is an error whose hint lists the configured names, and a cancelled prompt exits with 130.
+
 ### 5.6 doctor, import and trust (M1 step 11)
 
 - **`doctor`** reports five sections: Config, Daemon, Tools, Logins and Ports. Each line is `ok`, `warning` or `problem`, and the exit code is non-zero if any line is a problem.
@@ -610,12 +630,59 @@ Logins are tested with a fake login tool: a small shell script with `status` and
 
 Tests override locations with `TUNWARDEN_CONFIG` and `TUNWARDEN_STATE_DIR` and pick free ports, so they can run in parallel.
 
+**SSH integration tests (as implemented).** `crates/fake-tunnel/tests/ssh.rs` runs the SSH types against real OpenSSH servers built from `tests/sshd` (Alpine, `sshd` for user `tw`, an echo service on the server's 127.0.0.1:7000). They need Docker, so they are `#[ignore]`d and run with `cargo test -p fake-tunnel --test ssh -- --ignored`; CI runs them in a Linux job.
+
+- Each test starts its own network with two containers: `target`, and `jump`, which reaches `target` by a name only it can resolve. Containers and networks carry the label `tunwarden-it=1` and are removed when the test ends, also on failure.
+- The user's `~/.ssh` is never touched. `tools.ssh` points at a wrapper that runs ssh with `-F <test dir>/ssh_config` (test key only, no agent, a test `known_hosts`, strict host key checking). ssh passes `-F` on to jump-host hops.
+- Covered: a local forward to a service behind the server; the same through a jump host; a SOCKS proxy (`ssh-dynamic`); a remote forward reaching a local listener; a remote port in use (`port conflict`, no retries); an unknown host key (`host key` with the `trust` hint, then working once the key is known); a refused key (`credentials`); a dropped session reconnecting with a new process; a `command` tunnel that runs `ssh` getting the same failure handling.
+- **Finding.** sshd binds a remote forward on `localhost` to both 127.0.0.1 and ::1 and succeeds if either works. With the IPv4 port taken, `ExitOnForwardFailure` does not fire and the tunnel runs on ::1 only. The test takes the port on every address. This is a known limit of `ssh-remote`: Tunwarden cannot see which addresses the server bound. Not yet covered: a changed host key (all containers share the image's host key), keepalive detection of a frozen server (45 seconds), and `trust` itself, which needs a terminal.
+- The kubectl part of AC-11 (`kind`) is not built yet.
+
 **CI.** On every push: `cargo fmt --check`, `cargo clippy -- -D warnings` and `cargo test` on macOS, Windows and Linux, plus a Linux-only integration job.
+
+## 10a. Releases
+
+`dist` 0.34 (`dist-workspace.toml`) generates `.github/workflows/release.yml`. Pushing a tag `vX.Y.Z` runs it:
+
+1. **Build** `tunwarden-cli` for `aarch64`/`x86_64-apple-darwin`, `aarch64`/`x86_64-unknown-linux-musl` (static, so one binary runs on every distribution) and `x86_64-pc-windows-msvc`, with the `dist` profile (release plus thin LTO). Tarballs hold `tunwarden-cli-<target>/tunwarden`; the Windows zip holds `tunwarden.exe` at its root.
+2. **Host** a GitHub Release with the archives, `.sha256` files and the shell and PowerShell installers.
+
+That is all v0.1.0 does. These are prepared and tested locally, but switched off until each channel is added (PRD section 10):
+
+- **Homebrew and npm:** add `"homebrew"` and `"npm"` to `installers`, with `tap`, `formula = "tunwarden"` and `npm-package = "tunwarden"`; npm publishing adds `"npm"` to `publish-jobs` (secret `NPM_TOKEN`).
+- **crates.io:** `publish-jobs = ["./publish-crates"]` runs `cargo publish --workspace` (secret `CARGO_REGISTRY_TOKEN`).
+- **.deb, .rpm and Scoop:** `post-announce-jobs = ["./release-extras"]` builds them with nfpm from the musl archives (`packaging/`) and writes the Scoop manifest (`packaging/scoop-manifest.py`).
+
+Publish jobs skip prerelease tags such as `v0.1.0-rc.1`.
+
+The Homebrew formula and Scoop manifest are only release files. Copying them into `Om-jannu/homebrew-tap` and `Om-jannu/scoop-bucket` is manual, so the release never pushes to another repository. `cargo binstall` finds the archives through `[package.metadata.binstall]` in the CLI's `Cargo.toml`.
+
+The example config moved to `crates/tunwarden-cli/example-config.toml`, because `init` embeds it and `cargo publish` only packages files inside the crate.
+
+Checked locally: `dist plan`; a macOS archive from `dist build`; a static aarch64 musl build passing all tests in Docker; the `.deb` installing on Debian 12 and Ubuntu 24.04 and the `.rpm` on Fedora 41; the Scoop manifest from a zip shaped like dist's; `cargo publish --workspace --dry-run`. The workflow itself only runs on GitHub.
 
 ## 11. Later milestones (sketch)
 
-- **Sleep/wake and network (M2).** One `platform` module emits `Wake` and `NetworkChanged` events: IOKit power notifications on macOS, logind `PrepareForSleep` over D-Bus on Linux, `WM_POWERBROADCAST` on Windows. On every OS, a clock-jump check (wall time advancing much more than monotonic time between ticks) also emits `Wake`, as a fallback. The registry forwards `Wake` to all supervisors (FR-19).
-- **Autostart (M2).** `autostart enable` writes a launchd agent, a systemd user unit, or a Windows startup entry that runs `tunwarden daemon run`.
+- **Sleep/wake and network (M2, as implemented).** `system::watch` polls every 5 seconds, the same way on every OS, with no native notification APIs and no `unsafe`:
+  - **Wake:** if the wall clock moved more than 20 seconds past one tick between two ticks, the process was not running, so the machine slept. A large forward clock change looks the same; that is harmless. Checked by pausing a real daemon for 30 seconds (`kill -STOP`), which logged `woke from sleep (about 28 s)`.
+  - **Network:** the set of non-loopback interface addresses (`sysinfo` `network` feature). A change counts once it has stayed the same for one more tick, so a DHCP renewal counts once and a blip that goes back does not count.
+  - The daemon's `system_watcher` sends `Event::Wake` to every supervisor (FR-19: failed tunnels other than credential failures get fresh retries, reconnecting ones skip their backoff, running ones are probed now). After a wake, it also checks every login used by an active tunnel, because a long sleep is when logins expire.
+  - Tests inject events through `daemon::Options::system_events` (`tests/system.rs`).
+  - Not done: native sleep notifications (IOKit, logind, `WM_POWERBROADCAST`) would only add warning before sleep, which nothing needs yet. A running tunnel whose connection died during sleep is still found by its own exit or by SSH keepalives, not by the wake.
+- **Autostart (M2, as implemented).** `tunwarden autostart enable|disable|status` (`autostart` module). The file contents are pure functions, tested for all three OSes on any machine.
+  - macOS: `~/Library/LaunchAgents/io.github.om-jannu.tunwarden.plist` with `RunAtLoad`, running `tunwarden --config <file> daemon run`, output appended to `<state>/daemon.log`. Checked by loading it with `launchctl bootstrap`: launchd started the daemon, which restored a tunnel left by `daemon stop --keep`, and `launchctl bootout` stopped it with no processes left.
+  - Linux: `$XDG_CONFIG_HOME/systemd/user/tunwarden.service`, enabled with `systemctl --user enable` (`WantedBy=default.target`, `KillMode=mixed`). If `systemctl --user` fails, the file is removed and the error says a systemd user session is needed. The unit passes `systemd-analyze verify`; it has not yet run under a real systemd user session. Starting before login needs `loginctl enable-linger`, which the command mentions but does not run.
+  - Windows: the value `Tunwarden` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written with `reg.exe`, running `daemon start`, which detaches the daemon. Untested until the Windows spikes; a console window may flash at login until the desktop app (a GUI program) takes this over in M3.
+  - No entry restarts the daemon when it exits (no `KeepAlive`, no `Restart=`), so `daemon stop` keeps it stopped and a second daemon refused by the lock does not loop. Logging out sends SIGTERM, which stops like `daemon stop --keep`, so tunnels come back at the next login (FR-15).
+  - macOS and Linux entries record the `PATH` of the shell that ran `enable`, because login items do not get the shell's PATH (FR-36). `enable` warns when the binary is in npx's cache, a cargo target directory or a temp directory; `status` reports an entry whose binary is gone.
+  - `enable` and `disable` never start or stop the running daemon; the change applies at the next login.
+  - `doctor` shows autostart on its Daemon lines: off, on, a problem (the binary is gone), or a warning when the entry starts a different tunwarden than the one running `doctor`.
+- **Coming back after a restart (M2, tested).** Three ways a session ends, each covered in `tests/daemon.rs`:
+  - logout or shutdown (SIGTERM from launchd or systemd): tunnels are stopped and kept for restore, `state.json` records a clean stop, and the next daemon restores them with no crash note;
+  - power loss (the daemon and every tunnel killed at once): the next daemon finds nothing to sweep and restores them with the note "restored after the previous daemon stopped unexpectedly", or, with `restore_on_start = false`, leaves them stopped with a note saying why;
+  - the daemon alone killed (`a_crashed_daemon_is_cleaned_up_and_restored`): the leftover processes are swept first.
+
+  After a real reboot, recorded PIDs may belong to new processes; the sweep's start-time check leaves those alone (`sweep_leaves_a_reused_pid_alone`). A boot ID is not recorded, because the start-time check already covers it.
 - **Desktop app (M3).** The Tauri backend embeds the `client` module and relays `subscribe` events to the React frontend. It holds no tunnel logic.
 
 ## 12. M1 build order and spikes
@@ -682,4 +749,4 @@ The user asked for no tool-specific behaviour. What changed in code:
 | `config.add_project` | `config.add_entry` |
 | `auth_check_interval_minutes` | `login_check_interval_minutes` |
 
-The SSH types were kept because SSH is everywhere, needs safe defaults (section 4) and is what `trust` and `import` understand. Everything else was turning one tool's knowledge into code. gcloud, kubectl and AWS tunnels now appear only in `examples/config.toml`.
+The SSH types were kept because SSH is everywhere, needs safe defaults (section 4) and is what `trust` and `import` understand. Everything else was turning one tool's knowledge into code. gcloud, kubectl and AWS tunnels now appear only in `crates/tunwarden-cli/example-config.toml`.

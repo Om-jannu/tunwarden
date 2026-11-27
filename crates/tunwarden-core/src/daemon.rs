@@ -32,6 +32,7 @@ use crate::process::{self, DEFAULT_STOP_GRACE, SweepOutcome};
 use crate::proto::{self, method, notice, *};
 use crate::state::{DaemonInfo, Desired, StateError, StateStore, now};
 use crate::supervisor::{Event, LogSource, Observer, Spec, State, Status, Supervisor};
+use crate::system::{self, SystemEvent};
 
 pub struct Options {
     pub config_path: PathBuf,
@@ -40,6 +41,8 @@ pub struct Options {
     pub handle_signals: bool,
     /// Overrides the config's auth check interval, for tests.
     pub auth_interval: Option<Duration>,
+    /// Wake and network events from the test instead of the system (FR-19).
+    pub system_events: Option<mpsc::UnboundedReceiver<SystemEvent>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -150,7 +153,7 @@ impl Ctx {
 }
 
 /// Runs the daemon until it is asked to shut down.
-pub async fn run(opts: Options) -> Result<(), DaemonError> {
+pub async fn run(mut opts: Options) -> Result<(), DaemonError> {
     let state_dir = opts.state_dir.clone();
     private_dir(&state_dir).map_err(io_err(format!(
         "the state directory {}",
@@ -278,6 +281,14 @@ pub async fn run(opts: Options) -> Result<(), DaemonError> {
     });
     let watcher = tokio::spawn(auth_watcher(ctx.clone(), auth_interval));
     let config_watch = tokio::spawn(config_watcher(ctx.clone()));
+    let (system_source, system_rx) = match opts.system_events.take() {
+        Some(rx) => (None, rx),
+        None => {
+            let (tx, rx) = mpsc::unbounded_channel();
+            (Some(tokio::spawn(system::watch(tx))), rx)
+        }
+    };
+    let system_watch = tokio::spawn(system_watcher(ctx.clone(), system_rx));
     diag(&format!(
         "daemon {} (PID {}) listening on {endpoint}",
         crate::VERSION,
@@ -314,6 +325,10 @@ pub async fn run(opts: Options) -> Result<(), DaemonError> {
     diag(&format!("shutting down (keep = {keep})"));
     watcher.abort();
     config_watch.abort();
+    system_watch.abort();
+    if let Some(source) = system_source {
+        source.abort();
+    }
     let entries = std::mem::take(&mut *ctx.tunnels());
     let mut stopping = JoinSet::new();
     for (_, entry) in entries {
@@ -736,14 +751,18 @@ async fn handle(
         }
         method::CONFIG_ADD_ENTRY => {
             let p: ConfigAddEntryParams = params(req)?;
-            if !matches!(p.table.as_str(), "logins" | "profiles") {
-                return Err(RpcError::app(
-                    "invalid_edit",
-                    format!("cannot add to `{}`; use logins or profiles", p.table),
-                    None,
-                ));
-            }
+            entry_table(&p.table)?;
             edit_config(ctx, EditOp::AddEntry(p.table, p.name, p.fields)).await
+        }
+        method::CONFIG_EDIT_ENTRY => {
+            let p: ConfigEditEntryParams = params(req)?;
+            entry_table(&p.table)?;
+            edit_config(ctx, EditOp::EditEntry(p.table, p.name, p.set, p.unset)).await
+        }
+        method::CONFIG_REMOVE_ENTRY => {
+            let p: ConfigRemoveEntryParams = params(req)?;
+            entry_table(&p.table)?;
+            edit_config(ctx, EditOp::RemoveEntry(p.table, p.name)).await
         }
         method::DOCTOR => {
             let config = ctx.config();
@@ -1014,6 +1033,8 @@ enum EditOp {
     Add(String, serde_json::Map<String, Value>),
     Edit(String, serde_json::Map<String, Value>, Vec<String>),
     Remove(String),
+    EditEntry(String, String, serde_json::Map<String, Value>, Vec<String>),
+    RemoveEntry(String, String),
     AddEntry(String, String, serde_json::Map<String, Value>),
 }
 
@@ -1063,6 +1084,14 @@ async fn edit_config(ctx: &Ctx, op: EditOp) -> Result<Value, RpcError> {
             edit::add_entry(&mut doc, table, name, fields).map_err(edit_error)?;
             (name.clone(), "added")
         }
+        EditOp::EditEntry(table, name, set, unset) => {
+            edit::edit_entry(&mut doc, table, name, set, unset).map_err(edit_error)?;
+            (name.clone(), "updated")
+        }
+        EditOp::RemoveEntry(table, name) => {
+            edit::remove_entry(&mut doc, table, name).map_err(edit_error)?;
+            (name.clone(), "removed")
+        }
     };
     let new_text = doc.to_string();
     let new =
@@ -1111,10 +1140,26 @@ async fn edit_config(ctx: &Ctx, op: EditOp) -> Result<Value, RpcError> {
     })
 }
 
+/// Only `[[logins]]` and `[[profiles]]` are edited as entries.
+fn entry_table(table: &str) -> Result<(), RpcError> {
+    if matches!(table, "logins" | "profiles") {
+        Ok(())
+    } else {
+        Err(RpcError::app(
+            "invalid_edit",
+            format!("cannot edit `{table}` entries; use logins or profiles"),
+            None,
+        ))
+    }
+}
+
 fn edit_error(e: crate::config::edit::EditError) -> RpcError {
     use crate::config::edit::EditError;
     let code = match e {
         EditError::UnknownTunnel(_) => "unknown_tunnel",
+        EditError::Unknown("profile", _) => "unknown_profile",
+        EditError::Unknown(..) => "unknown_login",
+        EditError::InUse(..) => "in_use",
         EditError::Exists(..) => "already_exists",
         _ => "invalid_edit",
     };
@@ -1235,6 +1280,31 @@ async fn login_views(ctx: &Ctx, names: &[String]) -> Vec<LoginView> {
 /// Checks logins that have a `check` command and active tunnels on a
 /// schedule, and right away when a tunnel fails because its login expired,
 /// so the other tunnels sharing that login are caught too.
+/// Passes wake-ups and network changes to every tunnel (FR-19): failed
+/// tunnels get fresh retries, reconnecting ones skip their backoff, and
+/// running ones are checked now. After a wake, the logins in use are checked
+/// right away too, because a long sleep is when a login usually expires.
+async fn system_watcher(ctx: Arc<Ctx>, mut events: mpsc::UnboundedReceiver<SystemEvent>) {
+    while let Some(event) = events.recv().await {
+        diag(&event.describe());
+        for e in ctx.tunnels().values() {
+            e.supervisor.send(Event::Wake);
+        }
+        if matches!(event, SystemEvent::Woke { .. }) {
+            let due: Vec<String> = ctx
+                .config()
+                .logins
+                .iter()
+                .filter(|l| l.check.is_some() && !active_in(&ctx, &l.name).is_empty())
+                .map(|l| l.name.clone())
+                .collect();
+            for name in due {
+                check_login(&ctx, &name).await;
+            }
+        }
+    }
+}
+
 async fn auth_watcher(ctx: Arc<Ctx>, interval: Duration) {
     const MIN_GAP: Duration = Duration::from_secs(10);
     let mut notices = ctx.hub.tx.subscribe();

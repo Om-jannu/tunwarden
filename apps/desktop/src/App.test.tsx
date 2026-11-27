@@ -1,0 +1,65 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { setApi } from "./api";
+import { mockApi } from "./mock";
+import { App } from "./App";
+import { useStore } from "./store";
+
+afterEach(cleanup);
+
+describe("dashboard against the mock daemon", () => {
+  it("groups tunnels, and asks before starting a production one", async () => {
+    const calls: string[] = [];
+    const base = mockApi({ configExists: true });
+    setApi({ ...base, act: async (a, s) => (calls.push(`${a} ${s.names.join(",")}`), base.act(a, s)) });
+    useStore.setState({ phase: "loading", tunnels: null, confirm: null });
+    render(<App />);
+    await screen.findByText("staging-db");
+    expect(screen.getByText("No profile")).toBeTruthy();
+    expect(screen.getByText("production")).toBeTruthy();
+    expect(screen.getByText("2 running, 1 connecting, 1 failed")).toBeTruthy();
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start prod-db" })));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Start a production tunnel?")).toBeTruthy();
+    expect(calls).toEqual([]);
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Start prod-db" })));
+    await waitFor(() => expect(calls).toEqual(["start prod-db"]));
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Stop staging-db" })));
+    await waitFor(() => expect(calls).toEqual(["start prod-db", "stop staging-db"]), { timeout: 2000 });
+  });
+
+  it("shows the first-run screen without a config", async () => {
+    setApi(mockApi({ configExists: false }));
+    useStore.setState({ phase: "loading", tunnels: null, config: null });
+    render(<App />);
+    expect(await screen.findByText("Set up your tunnels")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start from the example config" })).toBeTruthy();
+  });
+
+  it("shows the daemon's validation error on the field it names", async () => {
+    setApi(mockApi({ configExists: true }));
+    useStore.setState({ phase: "loading", tunnels: null, config: null, editing: null, view: "tunnels" });
+    render(<App />);
+    await screen.findByText("staging-db");
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add tunnel" })));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "cache" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "SSH local" })));
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Add tunnel" })));
+    expect(await within(dialog).findByText(/a ssh-local tunnel needs `host`/)).toBeTruthy();
+    expect(within(dialog).getByLabelText("SSH host").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("logs in from the app and says which tunnels restart", async () => {
+    setApi(mockApi({ configExists: true }));
+    useStore.setState({ phase: "loading", tunnels: null, config: null, editing: null, loggingIn: null, view: "logins" });
+    render(<App />);
+    const row = (await screen.findAllByText("google")).find((e) => e.closest("tr"))!.closest("tr")!;
+    await act(async () => fireEvent.click(within(row).getByRole("button", { name: "Log in" })));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("You are now logged in as [me@example.com].", {}, { timeout: 3000 })).toBeTruthy();
+    expect(await within(dialog).findByText("Logged in. Restarting prod-api.")).toBeTruthy();
+  });
+});

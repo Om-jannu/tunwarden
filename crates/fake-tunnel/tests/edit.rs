@@ -361,3 +361,104 @@ fn hand_edits_are_picked_up_while_the_daemon_runs() {
         std::thread::sleep(Duration::from_millis(50));
     }
 }
+
+#[test]
+fn profiles_and_logins_are_edited_and_removed_through_the_daemon() {
+    // config.edit_entry and config.remove_entry, which the desktop app uses.
+    use tunwarden_core::client::{Client, ClientError};
+    use tunwarden_core::proto::{
+        ConfigEditEntryParams, ConfigEditResult, ConfigRemoveEntryParams, method,
+    };
+    let env = Env::new(
+        "version = 1\n\
+         [[logins]]\nname = \"google\"\nlogin = \"gcloud auth login\"\n\
+         [[profiles]]\nname = \"staging\"\nlogin = \"google\"  # shared\n\
+         [[profiles]]\nname = \"spare\"\n\
+         [[tunnels]]\nname = \"db\"\nprofile = \"staging\"\ncommand = \"x\"\n",
+    );
+    env.ok(&["daemon", "start"]);
+    let state = env.dir.path().join("state");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let mut c = Client::connect(&state, "test").await.unwrap();
+        let code = |e: ClientError| match e {
+            ClientError::Rpc(r) => r.data.map(|d| d.code).unwrap_or_default(),
+            other => panic!("{other}"),
+        };
+        let mut set = serde_json::Map::new();
+        set.insert("production".into(), Value::Bool(true));
+        let r: ConfigEditResult = c
+            .call(
+                method::CONFIG_EDIT_ENTRY,
+                ConfigEditEntryParams {
+                    table: "profiles".into(),
+                    name: "staging".into(),
+                    set,
+                    unset: vec![],
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(r.change, "updated");
+
+        let e = c
+            .call::<_, ConfigEditResult>(
+                method::CONFIG_REMOVE_ENTRY,
+                ConfigRemoveEntryParams {
+                    table: "profiles".into(),
+                    name: "staging".into(),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(code(e), "in_use");
+
+        let mut bad = serde_json::Map::new();
+        bad.insert("login".into(), Value::String("nope".into()));
+        let before = env.text();
+        let e = c
+            .call::<_, ConfigEditResult>(
+                method::CONFIG_EDIT_ENTRY,
+                ConfigEditEntryParams {
+                    table: "profiles".into(),
+                    name: "spare".into(),
+                    set: bad,
+                    unset: vec![],
+                },
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(code(e), "invalid_config");
+        assert_eq!(env.text(), before, "an invalid edit writes nothing");
+
+        let _: ConfigEditResult = c
+            .call(
+                method::CONFIG_REMOVE_ENTRY,
+                ConfigRemoveEntryParams {
+                    table: "profiles".into(),
+                    name: "spare".into(),
+                },
+            )
+            .await
+            .unwrap();
+        let e = c
+            .call::<_, ConfigEditResult>(
+                method::CONFIG_REMOVE_ENTRY,
+                ConfigRemoveEntryParams {
+                    table: "tunnels".into(),
+                    name: "db".into(),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(code(e), "invalid_edit", "tunnels use config.remove");
+    });
+    let text = env.text();
+    assert!(
+        text.contains("name = \"staging\"\nlogin = \"google\"  # shared\nproduction = true\n"),
+        "{text}"
+    );
+    assert!(!text.contains("spare"), "{text}");
+    let list = env.ok(&["list"]);
+    assert!(list.contains("staging (production)"), "{list}");
+}

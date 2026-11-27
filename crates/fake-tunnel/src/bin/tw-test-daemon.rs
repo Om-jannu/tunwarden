@@ -25,6 +25,7 @@ fn main() -> std::process::ExitCode {
         state_dir: PathBuf::from(state_dir),
         handle_signals: true,
         auth_interval: None,
+        system_events: None,
     };
     match runtime.block_on(tunwarden_core::daemon::run(opts)) {
         Ok(()) => std::process::ExitCode::SUCCESS,

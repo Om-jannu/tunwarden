@@ -1,0 +1,54 @@
+# After dist has published a GitHub Release: adds .deb and .rpm packages and
+# the Scoop manifest to it. Called by release.yml (dist `post-announce-jobs`).
+#
+# The Homebrew formula (tunwarden.rb) and the Scoop manifest (tunwarden.json)
+# are release files only. Copy them into Om-jannu/homebrew-tap (Formula/) and
+# Om-jannu/scoop-bucket (bucket/) yourself; nothing here pushes to those repos.
+name: Release extras
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  NFPM_VERSION: "2.49.0"
+
+jobs:
+  extras:
+    runs-on: ubuntu-latest
+    env:
+      PLAN: ${{ inputs.plan }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read the tag and version
+        run: |
+          tag=$(echo "$PLAN" | jq -r '.announcement_tag')
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "VERSION=${tag#v}" >> "$GITHUB_ENV"
+      - name: Download the release archives
+        run: |
+          mkdir -p archives
+          gh release download "$TAG" --dir archives \
+            --pattern 'tunwarden-cli-*-unknown-linux-musl.tar.xz' \
+            --pattern 'tunwarden-cli-x86_64-pc-windows-msvc.zip'
+      - name: Install nfpm
+        run: |
+          curl -fsSL -o nfpm.tar.gz "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
+          tar -xzf nfpm.tar.gz nfpm
+          sudo mv nfpm /usr/local/bin/
+      - name: Build .deb and .rpm
+        run: sh packaging/linux-packages.sh "$VERSION" archives dist-extra
+      - name: Write the Scoop manifest
+        run: python3 packaging/scoop-manifest.py "$VERSION" archives/tunwarden-cli-x86_64-pc-windows-msvc.zip dist-extra/tunwarden.json
+      - name: Add them to the release
+        run: |
+          cd dist-extra
+          sha256sum ./*.deb ./*.rpm > linux-packages.sha256
+          gh release upload "$TAG" ./*.deb ./*.rpm linux-packages.sha256 tunwarden.json --clobber
