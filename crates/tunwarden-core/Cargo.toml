@@ -34,6 +34,9 @@ ts-rs = { version = "12.0.1", optional = true, features = ["serde-json-impl", "n
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.32.0", features = ["signal", "process", "user"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation"] }
+
 [dev-dependencies]
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "test-util"] }

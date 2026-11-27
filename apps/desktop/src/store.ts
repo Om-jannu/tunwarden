@@ -91,6 +91,18 @@ export const useStore = create<Store>((set, get) => ({
           break;
       }
     });
+    // The watcher sends `connected` once, as soon as it reaches the daemon.
+    // With a daemon already running that happens before this listener exists
+    // and the event is dropped, so ask for the status once ourselves. If the
+    // daemon is not reachable, the watcher's next `disconnected` says why.
+    if (get().tunnels === null) {
+      try {
+        const s = await a.status();
+        if (get().tunnels === null) set({ tunnels: s.tunnels, configErrors: s.config_errors, failure: null });
+      } catch {
+        // Left to the watcher.
+      }
+    }
     await a.onQuitRequested(() => set({ quitOpen: true }));
     await a.onConfirmStart((c) => set({ confirm: { action: "start", selector: c.selector, production: c.production } }));
   },

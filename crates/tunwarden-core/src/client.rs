@@ -272,7 +272,37 @@ impl Launcher {
             const DETACHED_PROCESS: u32 = 0x0000_0008;
             const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
             cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            keep_own_stdio_from_children();
         }
         cmd.spawn()
+    }
+}
+
+/// Windows passes every inheritable handle to a new process, not only the
+/// ones set as its stdio. When this process's own stdout is a pipe (a script,
+/// the test harness, `tunwarden start | ...`), the daemon would hold that pipe
+/// open for as long as it runs, and whoever reads it would wait forever.
+/// Children that should share this process's stdio still get it: std
+/// duplicates inherited stdio handles as inheritable for each child.
+#[cfg(windows)]
+fn keep_own_stdio_from_children() {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
+    let handles = [
+        io::stdin().as_raw_handle(),
+        io::stdout().as_raw_handle(),
+        io::stderr().as_raw_handle(),
+    ];
+    for handle in handles {
+        if handle.is_null() {
+            continue;
+        }
+        // SAFETY: the handle is this process's own std handle, valid for the
+        // life of the process; clearing its inherit flag changes nothing else.
+        // A failure leaves the flag as it was, which is the old behaviour.
+        #[expect(unsafe_code, reason = "Win32 call with no safe std equivalent")]
+        unsafe {
+            SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0);
+        }
     }
 }

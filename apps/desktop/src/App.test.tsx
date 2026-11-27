@@ -30,6 +30,17 @@ describe("dashboard against the mock daemon", () => {
     await waitFor(() => expect(calls).toEqual(["start prod-db", "stop staging-db"]), { timeout: 2000 });
   });
 
+  it("shows the tunnels when the daemon connected before the window was listening", async () => {
+    // The app's watcher connects as soon as the app starts. With a daemon
+    // already running, its one `connected` event fires before the web view has
+    // registered its listener, and Tauri drops it.
+    const base = mockApi({ configExists: true });
+    setApi({ ...base, onDaemon: async () => () => {} });
+    useStore.setState({ phase: "loading", tunnels: null, config: null, view: "tunnels" });
+    render(<App />);
+    expect(await screen.findByText("staging-db")).toBeTruthy();
+    expect(screen.queryByText("Waiting for the daemon")).toBeNull();
+  });
   it("shows the first-run screen without a config", async () => {
     setApi(mockApi({ configExists: false }));
     useStore.setState({ phase: "loading", tunnels: null, config: null });
