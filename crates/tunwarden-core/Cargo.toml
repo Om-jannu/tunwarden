@@ -1,0 +1,34 @@
+[package]
+name = "tunwarden-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = true
+description = "Core library for Tunwarden, a cross-platform tunnel manager"
+
+[lints]
+workspace = true
+
+[dependencies]
+humantime = "2.4.0"
+listeners = "0.6.1"
+process-wrap = { version = "11.0.0", default-features = false, features = ["tokio1", "process-group", "job-object", "kill-on-drop", "creation-flags"] }
+regex = "1.13.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+shlex = "2.0.1"
+sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
+thiserror = "2.0.21"
+toml = "1.2.3"
+which = "8.0.6"
+toml_edit = "0.25.21"
+tokio = { version = "1.54.1", features = ["process", "time", "io-util", "rt", "sync", "macros", "net", "signal", "rt-multi-thread"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.32.0", features = ["signal", "process", "user"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "test-util"] }

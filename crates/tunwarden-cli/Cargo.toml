@@ -1,0 +1,29 @@
+[package]
+name = "tunwarden-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = true
+description = "Cross-platform manager that keeps SSH and command-based tunnels running"
+
+[lints]
+workspace = true
+
+[lib]
+name = "tunwarden_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tunwarden"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6.10", features = ["derive"] }
+clap_complete = "4.6.12"
+serde = "1.0.229"
+serde_json = "1.0.154"
+toml = "1.2.3"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time"] }
+tunwarden-core = { path = "../tunwarden-core", version = "0.1.0" }

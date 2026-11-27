@@ -1,0 +1,106 @@
+# Example Tunwarden config. Run `tunwarden init` to copy it to the location
+# `tunwarden config-path` prints, then replace the examples with your own.
+#
+# Tunwarden keeps tunnels running: any command that opens a local port.
+# Nothing in it is specific to a cloud or tool. The gcloud, AWS and kubectl
+# entries below are only examples of what you can write.
+version = 1
+
+[settings]
+restore_on_start = true             # bring back running tunnels after a crash or reboot
+login_check_interval_minutes = 5    # how often logins with a `check` command are checked
+
+[tools]
+# ssh = "/usr/bin/ssh"              # only needed if ssh is not on PATH
+# Extra directories to find commands in. The daemon may not get your shell's
+# PATH (macOS app and login items), so add tool directories here if needed.
+# path = ["~/google-cloud-sdk/bin"]
+
+# --- Logins ------------------------------------------------------------------
+# A login you renew now and then. When it expires, the tunnels that use it
+# stop with "login expired", and `tunwarden login NAME` runs `login`, then
+# restarts them. `check` succeeds while the login is valid; `expired` lists
+# texts (regular expressions, ignoring case) that mean "log in again".
+
+[[logins]]
+name = "google"
+check = "gcloud config config-helper --force-auth-refresh --format=none"
+login = "gcloud auth login me@example.com"
+expired = [
+  "Reauthentication failed",
+  "There was a problem refreshing your current auth tokens",
+  "You do not currently have an active account selected",
+  "invalid_grant",
+]
+env = { CLOUDSDK_CORE_ACCOUNT = "me@example.com" }
+
+[[logins]]
+name = "aws"
+check = "aws sts get-caller-identity --profile work"
+login = "aws sso login --profile work"
+expired = ["Token has expired", "The SSO session associated with this profile has expired", "Error loading SSO Token"]
+
+# --- Profiles ----------------------------------------------------------------
+# Settings shared by tunnels: environment variables, a production flag that
+# asks before starting, and the login the tunnels depend on.
+
+[[profiles]]
+name = "staging"
+login = "google"
+env = { CLOUDSDK_CORE_PROJECT = "example-staging-123" }
+
+[[profiles]]
+name = "prod"
+login = "google"
+production = true
+env = { CLOUDSDK_CORE_PROJECT = "example-prod-456", CLOUDSDK_CONFIG = "/home/me/.config/gcloud-prod" }
+
+[[profiles]]
+name = "aws-work"
+login = "aws"
+env = { AWS_PROFILE = "work" }
+
+# --- Tunnels -----------------------------------------------------------------
+# type = "command" (the default) runs any command. The forwards are the local
+# ports it opens; the tunnel is ready once they listen.
+
+[[tunnels]]
+name = "staging-db"
+profile = "staging"
+command = "gcloud compute start-iap-tunnel db-1 5432 --zone=europe-west1-b --local-host-port=127.0.0.1:5433"
+groups = ["daily"]
+forwards = [{ local_port = 5433 }]
+
+[[tunnels]]
+name = "prod-api"
+profile = "prod"
+command = "gcloud compute ssh app-1 --zone europe-west1-b --tunnel-through-iap -- -N -L 8080:localhost:80"
+forwards = [{ local_port = 8080 }]
+
+[[tunnels]]
+name = "rds"
+profile = "aws-work"
+command = "aws ssm start-session --target i-0123456789abcdef0 --document-name AWS-StartPortForwardingSession --parameters portNumber=5432,localPortNumber=5434"
+forwards = [{ local_port = 5434 }]
+
+[[tunnels]]
+name = "grafana"
+command = "kubectl --context example-cluster -n monitoring port-forward svc/grafana 3000:80"
+# Texts that mean the credentials need fixing; retrying would not help.
+credential_patterns = ["You must be logged in to the server", "getting credentials: exec"]
+forwards = [{ local_port = 3000 }]
+
+# The ssh types build the ssh command for you, with keepalives and no prompts.
+[[tunnels]]
+name = "bastion-redis"
+type = "ssh-local"
+host = "bastion"                    # a host or alias from ~/.ssh/config
+jump = ["jump.example.com"]
+groups = ["daily"]
+forwards = [{ local_port = 6380, remote_host = "redis.internal", remote_port = 6379 }]
+
+[[tunnels]]
+name = "socks"
+type = "ssh-dynamic"
+host = "bastion"
+forwards = [{ local_port = 1080 }]

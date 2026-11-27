@@ -1,0 +1,14 @@
+# Throwaway experiments for docs/design.md section 12. Not part of the main workspace.
+[package]
+name = "tunwarden-spikes"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+listeners = "0.6"
+sysinfo = "0.40"
+process-wrap = { version = "11", features = ["tokio1"] }
+nix = { version = "0.32", features = ["signal", "process"] }

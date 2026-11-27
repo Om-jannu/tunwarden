@@ -1,0 +1,12 @@
+/target
+/spikes/target
+**/*.rs.bk
+.DS_Store
+
+# Desktop app (M3)
+node_modules/
+apps/desktop/dist/
+
+# Never commit a real config (PRD section 10)
+config.toml
+!examples/config.toml
