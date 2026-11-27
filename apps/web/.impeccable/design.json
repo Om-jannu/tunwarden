@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-27T21:00:00Z",
+  "title": "Design System: Tunwarden website",
+  "extensions": {
+    "colorMeta": {
+      "plate-cream": { "role": "primary", "displayName": "Plate Cream", "canonical": "#efe9d8", "tonalRamp": ["#3b3829", "#57533f", "#77725b", "#999379", "#b9b39a", "#d6d0b9", "#efe9d8", "#faf7ee"] },
+      "diagram-enamel": { "role": "primary", "displayName": "Diagram Enamel", "canonical": "#2e3a35", "tonalRamp": ["#0d1210", "#161d1a", "#1f2925", "#2e3a35", "#415048", "#5b6b63", "#8a9790", "#c3ccc7"] },
+      "traffolyte-black": { "role": "secondary", "displayName": "Traffolyte Black", "canonical": "#0f1311" },
+      "danger-plate": { "role": "secondary", "displayName": "Danger Plate", "canonical": "#8f2a22", "tonalRamp": ["#2b0c0a", "#4a1511", "#6b1f19", "#8f2a22", "#b4473d", "#d27268", "#e9a59e", "#f8d8d4"] },
+      "aspect-green": { "role": "tertiary", "displayName": "Aspect Green", "canonical": "#3fd77f" },
+      "aspect-amber": { "role": "tertiary", "displayName": "Aspect Amber", "canonical": "#ffbe3d" },
+      "aspect-red": { "role": "tertiary", "displayName": "Aspect Red", "canonical": "#ff5a4c" },
+      "box-ground": { "role": "neutral", "displayName": "Box Ground", "canonical": "#1c2420" },
+      "box-floor": { "role": "neutral", "displayName": "Box Floor", "canonical": "#141a17" },
+      "rulebook-paper": { "role": "neutral", "displayName": "Rule-book Paper", "canonical": "#ece5d3" },
+      "rulebook-ink": { "role": "neutral", "displayName": "Rule-book Ink", "canonical": "#1d2420" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headline and page titles." },
+      "headline": { "displayName": "Headline", "purpose": "Section headings." },
+      "plate": { "displayName": "Plate", "purpose": "Every label: plates, nav, levers, buttons." },
+      "body": { "displayName": "Body", "purpose": "Sentences." },
+      "code": { "displayName": "Code", "purpose": "Commands, config, logs and ports only." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-mechanical", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Lever throw (520ms) and lamp aspect changes (300ms)." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "640px" },
+      { "name": "stack", "value": "1100px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Plate button",
+      "kind": "button",
+      "refersTo": "button-plate",
+      "description": "The primary action: download or get Tunwarden.",
+      "html": "<a class=\"ds-plate-button\" href=\"#\">Get Tunwarden</a>",
+      "css": ".ds-plate-button{display:inline-block;padding:1rem 1.5rem .9rem;border-radius:3px;background:#efe9d8;color:#141a17;font:800 1.375rem/1 'Sofia Sans Condensed','Arial Narrow',sans-serif;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;transition:background-color 160ms cubic-bezier(.16,1,.3,1)}.ds-plate-button:hover{background:#fff8e4}.ds-plate-button:focus-visible{outline:3px solid #ffbe3d;outline-offset:3px}"
+    },
+    {
+      "name": "Plate",
+      "kind": "chip",
+      "refersTo": "plate",
+      "description": "Engraved name or state plate.",
+      "html": "<span class=\"ds-plate\">staging-db</span> <span class=\"ds-plate ds-plate-danger\">production</span>",
+      "css": ".ds-plate{display:inline-block;padding:.28em .65em .24em;border-radius:2px;background:#0f1311;color:#efe9d8;font:700 .8125rem/1.2 'Sofia Sans Condensed','Arial Narrow',sans-serif;letter-spacing:.1em;text-transform:uppercase}.ds-plate-danger{background:#8f2a22;color:#fff3ee}"
+    },
+    {
+      "name": "Command strip",
+      "kind": "input",
+      "refersTo": "command",
+      "description": "A copyable install command.",
+      "html": "<div class=\"ds-command\"><code>cargo install --git https://github.com/Om-jannu/tunwarden tunwarden-cli</code><button>Copy</button></div>",
+      "css": ".ds-command{display:flex;border-radius:3px;background:#0b0e0d;color:#efe9d8;max-width:30rem}.ds-command code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;padding:.7rem .85rem;font:400 .8125rem/1.5 'JetBrains Mono',ui-monospace,monospace}.ds-command button{border:0;border-radius:0 3px 3px 0;padding:0 .9rem;background:#1a211e;color:#efe9d8;font:700 .8125rem/1 'Sofia Sans Condensed','Arial Narrow',sans-serif;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}.ds-command button:hover{background:#26302c}.ds-command button:focus-visible{outline:3px solid #ffbe3d;outline-offset:3px}"
+    },
+    {
+      "name": "Nameboard",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Top strip with the name and plate-lettered nav.",
+      "html": "<nav class=\"ds-nav\"><b>Tunwarden</b><a href=\"#\" aria-current=\"page\">Download</a><a href=\"#\">Docs</a><a href=\"#\">GitHub</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:.25rem;padding:0 1.5rem;min-height:4rem;background:#141a17;font-family:'Sofia Sans Condensed','Arial Narrow',sans-serif;text-transform:uppercase}.ds-nav b{margin-right:auto;color:#efe9d8;font-size:1.25rem;letter-spacing:.16em}.ds-nav a{padding:.55rem .8rem .5rem;border-radius:2px;color:#c4bfae;font-weight:700;font-size:.875rem;letter-spacing:.12em;text-decoration:none}.ds-nav a:hover{color:#efe9d8;background:#222b27}.ds-nav a[aria-current=page]{color:#efe9d8;background:#0f1311}"
+    },
+    {
+      "name": "Lever",
+      "kind": "custom",
+      "refersTo": "lever",
+      "description": "A demo control that throws like a signal-box lever; locked levers say why.",
+      "html": "<button class=\"ds-lever\"><span class=\"ds-arm\"></span><span class=\"ds-badge\">Expire the google login<small>Pull</small></span></button>",
+      "css": ".ds-lever{display:grid;justify-items:center;gap:.6rem;width:10rem;border:0;background:none;cursor:pointer}.ds-arm{display:block;width:14px;height:70px;border-radius:3px 3px 0 0;background:linear-gradient(#c9ccc6 0 18px,#c8322a 18px);transform-origin:50% 100%;transform:rotate(-14deg);transition:transform 520ms cubic-bezier(.16,1,.3,1)}.ds-lever:hover .ds-arm{transform:rotate(-9deg)}.ds-lever:active .ds-arm{transform:rotate(14deg)}.ds-badge{display:grid;gap:.3rem;width:100%;padding:.5rem .6rem;border-radius:2px;background:#0f1311;color:#efe9d8;font:700 .8125rem/1.2 'Sofia Sans Condensed','Arial Narrow',sans-serif;letter-spacing:.08em;text-transform:uppercase;text-align:center}.ds-badge small{color:#ffbe3d;font:400 .75rem/1.25 'Sofia Sans',sans-serif;letter-spacing:0;text-transform:none}.ds-lever:focus-visible{outline:none}.ds-lever:focus-visible .ds-badge{outline:3px solid #ffbe3d;outline-offset:3px}"
+    },
+    {
+      "name": "Terminal",
+      "kind": "card",
+      "refersTo": "terminal",
+      "description": "Real CLI output with state words coloured by aspect.",
+      "html": "<pre class=\"ds-term\"><b>$ tunwarden status</b>\nprod-api  <span class=\"r\">failed</span>   auth expired\nstaging-db  <span class=\"g\">running</span></pre>",
+      "css": ".ds-term{margin:0;padding:1.1rem 1.3rem;border-radius:4px;background:#0b0e0d;color:#d8d3c3;font:400 .8125rem/1.65 'JetBrains Mono',ui-monospace,monospace}.ds-term b{color:#efe9d8}.ds-term .r{color:#ff5a4c}.ds-term .g{color:#3fd77f}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Signal Box",
+    "overview": "The site is the inside of a railway signal box at night. The page ground is the box itself, dark green-grey; the main surfaces are an enamelled track diagram where each tunnel is a lit section running into the pixel portal from the app icon, and a lever frame below it that works the demo. Names and states are engraved black plates with cream capitals. The documentation is the box's rule book, printed on cream paper and ruled in ink.",
+    "keyCharacteristics": [
+      "One dark box, one lit diagram, one lever frame; everything else stays in the box's materials.",
+      "State lives in three lamp aspects (green, amber, red), always paired with words.",
+      "Real product output (CLI transcripts, config) is the proof, shown as terminal text.",
+      "Motion is mechanical: a lever throw and a lamp changing aspect."
+    ],
+    "rules": [
+      { "name": "The Aspect Rule", "body": "Green, amber and red mean running, changing and failed. They never decorate content, and each one always sits next to the word it means. Amber doubles as the focus ring and text selection, where it marks the one thing you are acting on.", "section": "colors" },
+      { "name": "The Danger Plate Rule", "body": "Red plates mark production or failure. A red plate that marks neither is a lie.", "section": "colors" },
+      { "name": "The Engraving Rule", "body": "Anything that names a thing is set in the plate face on a plate. Sentences are never set in capitals.", "section": "typography" },
+      { "name": "The Real Output Rule", "body": "Monospace appears only where the product's own text appears: commands, config, logs, ports.", "section": "typography" },
+      { "name": "The No-Glow Rule", "body": "Lamps glow only through their pixel halo ring drawn on the grid; no CSS glows or blurs.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do pair every aspect colour with its word.",
+      "Do show real CLI output and label demo data as a demo.",
+      "Do draw new pixel art in docs/brand/concepts/make.py and regenerate with scripts/art.py.",
+      "Do keep levers interlocked: a lever that cannot act says why."
+    ],
+    "donts": [
+      "Don't add testimonials, user counts or benchmarks; there are none (PRODUCT.md, Evidence on Hand).",
+      "Don't scale pixel art by fractions or smooth it.",
+      "Don't use the aspect colours for decoration, links or headings.",
+      "Don't use monospace for anything that is not the product's own text."
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+name: Website
+# Builds the static site in apps/web. Only runs when the site or the brand
+# drawings it is generated from change.
+on:
+  push:
+    paths: ["apps/web/**", "docs/brand/**", "pnpm-lock.yaml", ".github/workflows/web.yml"]
+  pull_request:
+    paths: ["apps/web/**", "docs/brand/**", "pnpm-lock.yaml", ".github/workflows/web.yml"]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: corepack enable pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Pixel art matches the brand drawings
+        run: |
+          python3 apps/web/scripts/art.py
+          git diff --exit-code apps/web/src/art/pixels.ts
+      - run: pnpm --filter tunwarden-web typecheck
+      - run: pnpm --filter tunwarden-web build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

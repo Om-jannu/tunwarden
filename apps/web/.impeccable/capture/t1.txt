@@ -1,0 +1,5 @@
+$ tunwarden start --group daily
+NAME           STATE    LOCAL           DETAIL
+bastion-redis  running  127.0.0.1:6380
+prod-api       running  127.0.0.1:8080
+staging-db     running  127.0.0.1:5433

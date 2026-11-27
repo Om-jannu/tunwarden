@@ -1,0 +1,5 @@
+$ tunwarden status
+NAME           STATE    LOCAL           PID    UPTIME  RESTARTS  DETAIL
+bastion-redis  running  127.0.0.1:6380  47594  21s     0
+prod-api       running  127.0.0.1:8080  47683  3s      1
+staging-db     running  127.0.0.1:5433  47682  3s      1

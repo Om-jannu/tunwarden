@@ -1,11 +1,41 @@
+# Rust
 /target
 /spikes/target
 **/*.rs.bk
-.DS_Store
 
-# Desktop app (M3)
+# Node and TypeScript (pnpm workspace: apps/*)
 node_modules/
+*.tsbuildinfo
 apps/desktop/dist/
 
-# Never commit a real config (PRD section 10)
+# Website (apps/web): Next.js build output and Vercel's local link
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+.vercel/
+
+# Python helpers (docs/brand, apps/web/scripts, packaging)
+__pycache__/
+*.pyc
+
+# Never commit a real config or secrets (PRD section 10).
+# crates/tunwarden-cli/example-config.toml is the example and stays tracked.
 config.toml
+.env
+.env.*
+!.env.example
+
+# Agent working files: scratch scripts, and Impeccable's per-machine state.
+# Impeccable's committed files are DESIGN.md, .impeccable/design.json,
+# .impeccable/surfaces/ and .impeccable/config.json; mocks/, review/ and
+# questions/ carry their own ignore files.
+/.agents/
+**/.impeccable/archive/
+**/.impeccable/config.local.json
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.log

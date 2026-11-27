@@ -1,0 +1,5 @@
+$ tunwarden status
+NAME           STATE    LOCAL           PID    UPTIME  RESTARTS  DETAIL
+bastion-redis  running  127.0.0.1:6380  47594  16s     0
+prod-api       failed   127.0.0.1:8080  -      -       1         auth expired: the google login has expired; run `tunwarden login google`
+staging-db     failed   127.0.0.1:5433  -      -       1         auth expired: the google login has expired; run `tunwarden login google`

@@ -1,0 +1,4 @@
+$ tunwarden login google
+Running the google login (used by staging, prod): /tmp/twdemo/login.sh
+You are now logged in as [me@example.com].
+logged in; restarting prod-api, staging-db

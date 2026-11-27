@@ -1,0 +1,20 @@
+2026-11-27T20:36:31.539Z tw stopped -> starting
+2026-11-27T20:36:31.553Z tw started PID 47595: /Users/omjannu/Projects/tunwarden/target/debug/fake-tunnel --listen 127.0.0.1:5433
+2026-11-27T20:36:32.589Z tw starting -> running
+2026-11-27T20:36:32.591Z tw ready
+2026-11-27T20:36:34.773Z tw running -> reconnecting
+2026-11-27T20:36:34.773Z tw command was killed by signal 15
+2026-11-27T20:36:34.773Z tw stopped PID 47595 (Graceful)
+2026-11-27T20:36:34.783Z tw retry 1/10 in 1s
+2026-11-27T20:36:35.785Z tw reconnecting -> starting
+2026-11-27T20:36:35.806Z tw started PID 47612: /Users/omjannu/Projects/tunwarden/target/debug/fake-tunnel --listen 127.0.0.1:5433
+2026-11-27T20:36:36.837Z tw starting -> running
+2026-11-27T20:36:36.837Z tw ready
+2026-11-27T20:36:41.866Z tw running -> failed
+2026-11-27T20:36:41.866Z tw failed (auth expired): the google login has expired; run `tunwarden login google`
+2026-11-27T20:36:41.894Z tw stopped PID 47612 (Graceful)
+2026-11-27T20:36:48.800Z tw failed -> starting
+2026-11-27T20:36:48.800Z tw login recovered; starting again
+2026-11-27T20:36:48.812Z tw started PID 47682: /Users/omjannu/Projects/tunwarden/target/debug/fake-tunnel --listen 127.0.0.1:5433
+2026-11-27T20:36:49.873Z tw starting -> running
+2026-11-27T20:36:49.873Z tw ready
