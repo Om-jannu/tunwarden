@@ -149,6 +149,12 @@ fn import_prints_then_writes() {
 
 #[test]
 fn doctor_reports_problems_and_exits_non_zero() {
+    // An absolute path that does not exist, in this OS's form.
+    let missing_ssh = if cfg!(windows) {
+        r"C:\nonexistent\ssh.exe"
+    } else {
+        "/nonexistent/ssh"
+    };
     let squatter = TcpListener::bind("127.0.0.1:0").unwrap();
     let busy = squatter.local_addr().unwrap().port();
     let free = TcpListener::bind("127.0.0.1:0")
@@ -157,7 +163,7 @@ fn doctor_reports_problems_and_exits_non_zero() {
         .unwrap()
         .port();
     let env = Env::new(&format!(
-        "version = 1\n[tools]\nssh = \"/nonexistent/ssh\"\n\
+        "version = 1\n[tools]\nssh = '{missing_ssh}'\n\
          [[tunnels]]\nname = \"ok\"\ncommand = ''''{FAKE}''''\nforwards = [{{ local_port = {free} }}]\n\
          [[tunnels]]\nname = \"taken\"\ncommand = ''''{FAKE}''''\nforwards = [{{ local_port = {busy} }}]\n\
          [[tunnels]]\nname = \"k\"\ntype = \"ssh-local\"\nhost = \"bastion\"\nforwards = [{{ local_port = 1, remote_port = 2 }}]\n"
@@ -176,7 +182,9 @@ fn doctor_reports_problems_and_exits_non_zero() {
     );
     assert!(
         report.contains("problem  ssh")
-            && report.contains("/nonexistent/ssh in [tools], but that file does not exist"),
+            && report.contains(&format!(
+                "{missing_ssh} in [tools], but that file does not exist"
+            )),
         "{report}"
     );
     assert!(

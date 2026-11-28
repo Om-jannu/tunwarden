@@ -64,7 +64,7 @@ jump = ["jump.example.com"]
 forwards = [{ local_port = 6380, remote_host = "redis.internal", remote_port = 6379 }]
 ```
 
-The full example, with AWS and kubectl entries, is [`crates/tunwarden-cli/example-config.toml`](crates/tunwarden-cli/example-config.toml). Commands are never run through a shell: pipes, `&&` and `$VAR` are rejected; point the command at a script if you need them.
+The full example, with AWS and kubectl entries, is [`crates/tunwarden-cli/example-config.toml`](crates/tunwarden-cli/example-config.toml). Commands are never run through a shell: pipes, `&&` and `$VAR` are rejected; point the command at a script if you need them. Quotes group words as in a shell. On Windows a backslash is an ordinary character, so `C:\tools\gcloud.cmd` needs no quotes; on macOS and Linux it escapes the next character, as in a shell.
 
 When a login expires, its tunnels stop with "login expired" and the next step:
 

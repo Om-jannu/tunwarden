@@ -855,12 +855,18 @@ impl Ctx<'_> {
     }
 
     fn abs_path(&mut self, value: &str, path: &FieldPath, env: &impl Env) -> Option<PathBuf> {
+        /// What an absolute path looks like here, for the error message.
+        const ABS_EXAMPLE: &str = if cfg!(windows) {
+            r"such as C:\tools\ssh.exe, or starting with ~"
+        } else {
+            "starting with / or ~"
+        };
         match expand_tilde(Path::new(value), env) {
             Some(p) if p.is_absolute() => Some(p),
             Some(_) => {
                 self.err(
                     path,
-                    format!("\"{value}\" must be an absolute path (starting with / or ~)"),
+                    format!("\"{value}\" must be an absolute path ({ABS_EXAMPLE})"),
                 );
                 None
             }

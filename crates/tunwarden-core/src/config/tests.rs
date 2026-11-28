@@ -7,8 +7,21 @@ use crate::paths::tests::FakeEnv;
 
 const EXAMPLE: &str = include_str!("../../../tunwarden-cli/example-config.toml");
 
+/// A home directory that is absolute on the OS running the tests.
+const HOME: &str = if cfg!(windows) {
+    r"C:\home\me"
+} else {
+    "/home/me"
+};
+/// Another absolute directory.
+const OPT: &str = if cfg!(windows) {
+    r"C:\opt\tools"
+} else {
+    "/opt/tools"
+};
+
 fn env() -> FakeEnv {
-    FakeEnv::with_home("/home/me")
+    FakeEnv::with_home(HOME)
 }
 
 fn ok(src: &str) -> Config {
@@ -309,15 +322,13 @@ fn ranges_for_settings() {
 
 #[test]
 fn tool_paths() {
-    let c =
-        ok("version = 1\n[tools]\nssh = \"~/bin/ssh\"\npath = [\"~/sdk/bin\", \"/opt/tools\"]\n");
-    assert_eq!(c.tools.ssh, Some(PathBuf::from("/home/me").join("bin/ssh")));
+    let c = ok(&format!(
+        "version = 1\n[tools]\nssh = \"~/bin/ssh\"\npath = [\"~/sdk/bin\", '{OPT}']\n"
+    ));
+    assert_eq!(c.tools.ssh, Some(PathBuf::from(HOME).join("bin/ssh")));
     assert_eq!(
         c.tools.path,
-        [
-            PathBuf::from("/home/me").join("sdk/bin"),
-            PathBuf::from("/opt/tools")
-        ]
+        [PathBuf::from(HOME).join("sdk/bin"), PathBuf::from(OPT)]
     );
     let e = one_error("version = 1\n[tools]\nssh = \"bin/ssh\"\n");
     assert!(e.contains("must be an absolute path"), "{e}");

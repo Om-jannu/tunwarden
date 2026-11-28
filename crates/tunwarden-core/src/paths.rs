@@ -222,6 +222,8 @@ pub(crate) mod tests {
         );
     }
 
+    // Linux rules for XDG paths; `/xdg` is not absolute on a Windows host.
+    #[cfg(unix)]
     #[test]
     fn config_honors_absolute_xdg_and_ignores_relative() {
         let env = FakeEnv::with_home("/home/me").set("XDG_CONFIG_HOME", "/xdg");
@@ -247,11 +249,14 @@ pub(crate) mod tests {
             state_dir(&env, Os::Linux).unwrap(),
             p(&["/Users/me", ".local", "state", "tunwarden"])
         );
-        let env = FakeEnv::with_home("/home/me").set("XDG_STATE_HOME", "/xdg/state");
-        assert_eq!(
-            state_dir(&env, Os::Linux).unwrap(),
-            p(&["/xdg/state", "tunwarden"])
-        );
+        #[cfg(unix)]
+        {
+            let env = FakeEnv::with_home("/home/me").set("XDG_STATE_HOME", "/xdg/state");
+            assert_eq!(
+                state_dir(&env, Os::Linux).unwrap(),
+                p(&["/xdg/state", "tunwarden"])
+            );
+        }
         let env = FakeEnv::with_home("C:\\Users\\me").set("LOCALAPPDATA", "C:\\Local");
         assert_eq!(
             state_dir(&env, Os::Windows).unwrap(),

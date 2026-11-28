@@ -519,12 +519,16 @@ mod tests {
             location(&env, Os::Linux).unwrap(),
             PathBuf::from("/home/me/.config/systemd/user/tunwarden.service")
         );
-        let env = env.set("XDG_CONFIG_HOME", "/xdg");
-        assert_eq!(
-            location(&env, Os::Linux).unwrap(),
-            PathBuf::from("/xdg/systemd/user/tunwarden.service")
-        );
         assert_eq!(location(&env, Os::Windows), None);
+        // Linux rules for XDG paths; `/xdg` is not absolute on a Windows host.
+        #[cfg(unix)]
+        {
+            let env = env.set("XDG_CONFIG_HOME", "/xdg");
+            assert_eq!(
+                location(&env, Os::Linux).unwrap(),
+                PathBuf::from("/xdg/systemd/user/tunwarden.service")
+            );
+        }
     }
 
     #[test]

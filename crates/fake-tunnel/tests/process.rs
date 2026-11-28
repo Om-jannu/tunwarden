@@ -91,8 +91,14 @@ async fn stop_removes_the_whole_tree_and_frees_the_port() {
     assert!(p.alive());
 
     let outcome = p.stop(Duration::from_secs(5)).await.unwrap();
-
-    assert_eq!(outcome, StopOutcome::Graceful);
+    // Windows ends the job object directly until spike S1 adds a graceful
+    // stop (src/process.rs); either way the whole tree must be gone.
+    let expected = if cfg!(windows) {
+        StopOutcome::Forced
+    } else {
+        StopOutcome::Graceful
+    };
+    assert_eq!(outcome, expected);
     assert!(!p.alive());
     assert!(!group_alive(&p.record()));
     #[cfg(unix)]

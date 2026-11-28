@@ -126,7 +126,9 @@ export default function Docs() {
           <Terminal text={configExample} label="Example config.toml" />
           <p>
             Commands are never run through a shell: pipes, <code>&&</code> and <code>$VAR</code> are rejected; point
-            the command at a script if you need them. The full example, with AWS and kubectl entries, is{" "}
+            the command at a script if you need them. Quotes group words as in a shell. On Windows a backslash is an
+            ordinary character, so <code>C:\tools\gcloud.cmd</code> needs no quotes; on macOS and Linux it escapes the
+            next character. The full example, with AWS and kubectl entries, is{" "}
             <a href={`${repo}/blob/main/crates/tunwarden-cli/example-config.toml`}>example-config.toml</a>.
           </p>
 

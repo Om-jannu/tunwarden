@@ -102,7 +102,15 @@ fn command_tunnels_run_any_program_with_the_profile_env() {
     assert_eq!(plan.program, Program::Command("my-cloud".to_owned()));
     assert_eq!(
         plan.args,
-        ["connect", "vm 1", "--zone", "z", "-i", "/home/me/.ssh/id"]
+        [
+            "connect",
+            "vm 1",
+            "--zone",
+            "z",
+            "-i",
+            // `~` expands with this OS's separator.
+            &*Path::new("/home/me").join(".ssh/id").to_string_lossy()
+        ]
     );
     assert_eq!(
         plan.env,
@@ -423,4 +431,63 @@ fn example_config_builds_every_command() {
         let (p, l) = c.context_of(t);
         assert!(!t.launch_plan(p, l).display().is_empty());
     }
+}
+
+#[test]
+fn windows_syntax_keeps_backslashes() {
+    use crate::types::{Syntax, split_words};
+    let w = |c: &str| split_words(c, Syntax::Windows);
+    assert_eq!(
+        w(r"C:\tools\gcloud.cmd compute start-iap-tunnel db 5432").unwrap(),
+        [
+            r"C:\tools\gcloud.cmd",
+            "compute",
+            "start-iap-tunnel",
+            "db",
+            "5432"
+        ]
+    );
+    assert_eq!(
+        w(r#"'C:\Program Files\x.exe' --a "b c"  d"#).unwrap(),
+        [r"C:\Program Files\x.exe", "--a", "b c", "d"]
+    );
+    // Quoted parts join the word they touch; '' is an empty word.
+    assert_eq!(w(r#"a'b c'd "" e"#).unwrap(), ["ab cd", "", "e"]);
+    assert_eq!(w("  ").unwrap(), Vec::<String>::new());
+    assert_eq!(w("'open"), None);
+    // The same line under POSIX rules drops the backslashes.
+    assert_eq!(
+        split_words(r"C:\tools\gcloud.cmd", Syntax::Posix).unwrap(),
+        ["C:toolsgcloud.cmd"]
+    );
+}
+
+#[test]
+fn quote_with_round_trips() {
+    use crate::types::{Syntax, quote_with, split_words};
+    let words = [
+        r"C:\tools\gcloud.cmd",
+        r"C:\Program Files\x.exe",
+        "it's",
+        r#"say "hi""#,
+        r#"both ' and ""#,
+        "",
+        "plain",
+    ];
+    for syntax in [Syntax::Posix, Syntax::Windows] {
+        let line = words
+            .iter()
+            .map(|w| quote_with(w, syntax))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(
+            split_words(&line, syntax).unwrap(),
+            words,
+            "{syntax:?}: {line}"
+        );
+    }
+    assert_eq!(
+        quote_with(r"C:\tools\gcloud.cmd", Syntax::Windows),
+        r"C:\tools\gcloud.cmd"
+    );
 }

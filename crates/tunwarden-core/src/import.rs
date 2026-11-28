@@ -125,7 +125,7 @@ pub fn import(text: &str, config: &Config) -> Imported {
                     json!(
                         words
                             .iter()
-                            .map(|w| crate::types::quote(w))
+                            .map(|w| crate::types::quote_with(w, crate::types::Syntax::current()))
                             .collect::<Vec<_>>()
                             .join(" ")
                     ),

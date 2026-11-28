@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::fields::{Fields, forbid_forward_fields};
 use super::{
-    OutputPattern, Program, Readiness, Tool, TypeDef, listen_addrs, split_command_line,
+    OutputPattern, Program, Readiness, Syntax, Tool, TypeDef, listen_addrs, split_command_line,
     user_pattern,
 };
 use crate::config::Forward;
@@ -97,7 +97,7 @@ impl Env for EnvRef<'_> {
 
 /// The first character outside single quotes that a shell would treat
 /// specially, with a description. Inside double quotes only `$` and `` ` `` count.
-pub(super) fn shell_feature(command: &str) -> Option<(char, &'static str)> {
+pub(super) fn shell_feature(command: &str, syntax: Syntax) -> Option<(char, &'static str)> {
     let mut single = false;
     let mut double = false;
     let mut chars = command.chars();
@@ -107,7 +107,7 @@ pub(super) fn shell_feature(command: &str) -> Option<(char, &'static str)> {
             continue;
         }
         match c {
-            '\\' => {
+            '\\' if syntax == Syntax::Posix => {
                 chars.next();
             }
             '\'' if !double => single = true,
@@ -170,18 +170,35 @@ impl TypeDef for CommandTunnel {
 #[cfg(test)]
 mod tests {
     use super::shell_feature;
+    use crate::types::Syntax;
+
+    fn posix(c: &str) -> Option<(char, &'static str)> {
+        shell_feature(c, Syntax::Posix)
+    }
 
     #[test]
     fn shell_features() {
-        assert_eq!(shell_feature("a b 'c d'"), None);
-        assert_eq!(shell_feature("a | b").map(|x| x.0), Some('|'));
-        assert_eq!(shell_feature("a && b").map(|x| x.0), Some('&'));
-        assert_eq!(shell_feature("a; b").map(|x| x.0), Some(';'));
-        assert_eq!(shell_feature("a > log").map(|x| x.0), Some('>'));
-        assert_eq!(shell_feature("echo $HOME").map(|x| x.0), Some('$'));
-        assert_eq!(shell_feature("echo \"$HOME\"").map(|x| x.0), Some('$'));
-        assert_eq!(shell_feature("echo '$HOME | x'"), None);
-        assert_eq!(shell_feature("echo \"a|b\""), None);
-        assert_eq!(shell_feature("echo a\\|b"), None);
+        assert_eq!(posix("a b 'c d'"), None);
+        assert_eq!(posix("a | b").map(|x| x.0), Some('|'));
+        assert_eq!(posix("a && b").map(|x| x.0), Some('&'));
+        assert_eq!(posix("a; b").map(|x| x.0), Some(';'));
+        assert_eq!(posix("a > log").map(|x| x.0), Some('>'));
+        assert_eq!(posix("echo $HOME").map(|x| x.0), Some('$'));
+        assert_eq!(posix("echo \"$HOME\"").map(|x| x.0), Some('$'));
+        assert_eq!(posix("echo '$HOME | x'"), None);
+        assert_eq!(posix("echo \"a|b\""), None);
+        assert_eq!(posix("echo a\\|b"), None);
+    }
+
+    #[test]
+    fn a_backslash_escapes_nothing_on_windows() {
+        let windows = |c: &str| shell_feature(c, Syntax::Windows).map(|x| x.0);
+        assert_eq!(
+            windows("C:\\tools\\gcloud.cmd compute start-iap-tunnel db 5432"),
+            None
+        );
+        // `\|` is not an escaped pipe on Windows; the pipe still needs a shell.
+        assert_eq!(windows("echo a\\|b"), Some('|'));
+        assert_eq!(windows("'C:\\dir\\' | x"), Some('|'));
     }
 }

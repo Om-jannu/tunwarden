@@ -237,6 +237,97 @@ pub fn parse_settings(
     if failed { None } else { settings }
 }
 
+/// How a command line in the config is split into words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Syntax {
+    /// POSIX shell rules: quotes group words, `\` escapes the next character.
+    Posix,
+    /// The same, except that `\` is an ordinary character, so Windows paths
+    /// such as `C:\tools\gcloud.cmd` need no quoting. `'...'` and `"..."` still
+    /// group, with nothing escaped inside them.
+    Windows,
+}
+
+impl Syntax {
+    /// The syntax of the OS this binary was built for.
+    pub const fn current() -> Syntax {
+        if cfg!(windows) {
+            Syntax::Windows
+        } else {
+            Syntax::Posix
+        }
+    }
+}
+
+/// Splits `command` into words; `None` for an unclosed quote.
+pub fn split_words(command: &str, syntax: Syntax) -> Option<Vec<String>> {
+    match syntax {
+        Syntax::Posix => shlex::split(command),
+        Syntax::Windows => split_windows(command),
+    }
+}
+
+fn split_windows(command: &str) -> Option<Vec<String>> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut in_word = false;
+    let mut open: Option<char> = None;
+    for c in command.chars() {
+        match open {
+            Some(q) if c == q => open = None,
+            Some(_) => word.push(c),
+            None if c == '\'' || c == '"' => {
+                open = Some(c);
+                in_word = true;
+            }
+            None if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut word));
+                    in_word = false;
+                }
+            }
+            None => {
+                word.push(c);
+                in_word = true;
+            }
+        }
+    }
+    if open.is_some() {
+        return None;
+    }
+    if in_word {
+        words.push(word);
+    }
+    Some(words)
+}
+
+/// Quotes `word` so that [`split_words`] with the same syntax gives it back.
+/// For text written into the config.
+pub fn quote_with(word: &str, syntax: Syntax) -> String {
+    match syntax {
+        Syntax::Posix => quote(word),
+        Syntax::Windows => {
+            let safe = !word.is_empty()
+                && word
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "_@%+=:,./-\\".contains(c));
+            if safe {
+                word.to_owned()
+            } else if !word.contains('\'') {
+                format!("'{word}'")
+            } else if !word.contains('"') {
+                format!("\"{word}\"")
+            } else {
+                // Both quote characters: single-quoted runs joined by "'".
+                word.split('\'')
+                    .map(|part| format!("'{part}'"))
+                    .collect::<Vec<_>>()
+                    .join("\"'\"")
+            }
+        }
+    }
+}
+
 /// The listen addresses of a tunnel's forwards.
 fn listen_addrs(forwards: &[Forward]) -> Vec<SocketAddr> {
     forwards
@@ -246,14 +337,16 @@ fn listen_addrs(forwards: &[Forward]) -> Vec<SocketAddr> {
 }
 
 /// Splits a command line without a shell (FR-8): shell-style quoting and word
-/// splitting, `~` expanded at the start of a word, no other shell features.
+/// splitting in this OS's [`Syntax`], `~` expanded at the start of a word, no
+/// other shell features.
 pub fn split_command_line(command: &str, env: &dyn Env) -> Result<Vec<String>, String> {
-    if let Some((c, what)) = command::shell_feature(command) {
+    let syntax = Syntax::current();
+    if let Some((c, what)) = command::shell_feature(command, syntax) {
         return Err(format!(
             "uses {what} (`{c}`), which needs a shell, but Tunwarden runs commands without one; put the command in a script and run the script instead"
         ));
     }
-    let words = shlex::split(command).ok_or_else(|| "has an unclosed quote".to_owned())?;
+    let words = split_words(command, syntax).ok_or_else(|| "has an unclosed quote".to_owned())?;
     if words.is_empty() {
         return Err("is empty".to_owned());
     }
