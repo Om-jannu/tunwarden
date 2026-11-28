@@ -119,9 +119,14 @@ fn command_tunnels_run_any_program_with_the_profile_env() {
             ("TOOL_PROJECT".to_owned(), "example-123".to_owned())
         ]
     );
+    // On Windows the expanded path has a `\`, so the display quotes it.
+    let key = Path::new("/home/me").join(".ssh/id");
     assert_eq!(
         plan.display(),
-        "TOOL_ACCOUNT=me@example.com TOOL_PROJECT=example-123 my-cloud connect 'vm 1' --zone z -i /home/me/.ssh/id"
+        format!(
+            "TOOL_ACCOUNT=me@example.com TOOL_PROJECT=example-123 my-cloud connect 'vm 1' --zone z -i {}",
+            quote(&key.to_string_lossy())
+        )
     );
 
     // The login's env comes too, so the tunnel runs as the account the check
