@@ -4,6 +4,10 @@
 
 Tunwarden keeps your tunnels running. It starts SSH forwards and any command that opens a local port (`gcloud compute start-iap-tunnel`, `kubectl port-forward`, `aws ssm start-session`, ...), checks that each one is really listening, reconnects dropped ones, keeps a log per tunnel, and tells you when a login has expired. One `tunwarden login` renews it and brings the affected tunnels back.
 
+[![Seven tunnel commands in seven terminals fold into the seven rows of the Tunwarden window](docs/brand/seven-terminals.gif)](https://tunwarden.vercel.app/#app-title)
+
+[Watch the 25-second video](https://tunwarden.vercel.app/#app-title) (with sound). The hosts are the example config's made-up ones; every error shown is real output.
+
 It runs on macOS, Linux and Windows. A small background daemon owns the tunnels, so they survive closing the terminal. There is no account, telemetry or network access of its own.
 
 > Status: first release, 0.1.0. The CLI, the daemon and the desktop app run on macOS, Linux and Windows.

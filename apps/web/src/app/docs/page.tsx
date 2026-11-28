@@ -15,6 +15,7 @@ const contents = [
   ["config", "Config"],
   ["logins", "Logins"],
   ["commands", "Commands"],
+  ["app", "Desktop app"],
   ["autostart", "Start at login"],
   ["limits", "Known limits"],
 ] as const;
@@ -163,6 +164,39 @@ export default function Docs() {
           <p>
             Bash works the same way; fish and PowerShell are in <code>tunwarden completions --help</code>.
           </p>
+
+          <h2 id="app">Desktop app</h2>
+          <figure className="docs-shot">
+            <a href="/screens/main-light.webp" className="shot-link" aria-label="Open the screenshot at full size">
+<img
+              src="/screens/main-light.webp"
+              width={1600}
+              height={1098}
+              alt="The Tunwarden window in light mode: the tunnel list grouped by profile and the selected tunnel's details and log."
+              loading="lazy"
+              decoding="async"
+            />
+</a>
+          </figure>
+          <p>
+            The app talks to the same daemon as the CLI, so both always show the same state. It lives in the tray or menu
+            bar: click the lamp for every tunnel with a switch, or open the window for the details and logs.
+          </p>
+          <ul>
+            <li>
+              Click a tunnel to open its log, the exact command and its last 24 hours beside the list. <code>Esc</code>{" "}
+              closes it.
+            </li>
+            <li>
+              <code>⌘K</code> (<code>Ctrl+K</code> on Windows and Linux) opens every action: start, stop, restart, log in,
+              add or import tunnels.
+            </li>
+            <li>
+              On the tunnel list, <code>j</code> and <code>k</code> move through tunnels and <code>space</code> starts or
+              stops the selected one.
+            </li>
+            <li>Closing the window leaves the tunnels running. Quit from the tray menu, and choose whether they keep running.</li>
+          </ul>
 
           <h2 id="autostart">Start at login</h2>
           <p>

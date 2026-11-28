@@ -34,6 +34,44 @@ export default function Home() {
           />
         </section>
 
+        <section className="section app" aria-labelledby="app-title">
+          <h2 id="app-title">The same box, on your desk.</h2>
+          <p className="section-lede">
+            The desktop app shows every tunnel with its state and the reason it failed, and opens a tunnel&rsquo;s log
+            and its last 24 hours beside the list.
+          </p>
+          <figure className="shot shot-video">
+            <video
+              controls
+              playsInline
+              preload="none"
+              poster="/video/seven-terminals.webp"
+              width={1920}
+              height={1080}
+              aria-label="Seven tunnel commands in seven terminals, two of them failing, fold into the seven rows of the Tunwarden window, which shows each failure's reason."
+            >
+              <source src="/video/seven-terminals.mp4" type="video/mp4" />
+            </video>
+            <figcaption>
+              25 seconds, with sound. Seven tunnels in seven terminals, then the same seven in one window. The hosts are
+              the example config&rsquo;s made-up ones; every error on screen is real output.
+            </figcaption>
+          </figure>
+          <figure className="shot">
+            <a href="/screens/main-dark.webp" className="shot-link" aria-label="Open the screenshot at full size">
+<img
+              src="/screens/main-dark.webp"
+              width={1600}
+              height={1098}
+              alt="The Tunwarden window on macOS: tunnels grouped by profile, three failed and one running, and the running tunnel's log and 24-hour strip in a pane on the right."
+              loading="lazy"
+              decoding="async"
+            />
+</a>
+            <figcaption>Tunwarden 0.1.0 on macOS, with the example config from <code>tunwarden init</code>. Its hosts are made up, so most tunnels stop or fail, each with its reason.</figcaption>
+          </figure>
+        </section>
+
         <section className="section recovery" aria-labelledby="recovery-title">
           <h2 id="recovery-title">One login, and they come back.</h2>
           <p className="section-lede">
@@ -135,21 +173,38 @@ export default function Home() {
             The desktop app lives in the tray or menu bar. Its lamp shows the worst state among your tunnels, and the app
             and <code>tunwarden status</code> read the same daemon, so they never disagree.
           </p>
-          <ul className="tray-row">
-            {(
-              [
-                ["running", "Running"],
-                ["connecting", "Connecting or reconnecting"],
-                ["failed", "A tunnel failed"],
-                ["idle", "Nothing running"],
-              ] as const
-            ).map(([state, text]) => (
-              <li key={state}>
-                <TrayGlyph state={state} />
-                <span>{text}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="tray-layout">
+            <div>
+            <ul className="tray-row">
+              {(
+                [
+                  ["running", "Running"],
+                  ["connecting", "Connecting or reconnecting"],
+                  ["failed", "A tunnel failed"],
+                  ["idle", "Nothing running"],
+                ] as const
+              ).map(([state, text]) => (
+                <li key={state}>
+                  <TrayGlyph state={state} />
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ul>
+            </div>
+            <figure className="shot shot-popover">
+              <a href="/screens/popover-dark.webp" className="shot-link" aria-label="Open the screenshot at full size">
+<img
+                src="/screens/popover-dark.webp"
+                width={560}
+                height={746}
+                alt="The Tunwarden tray popover: each tunnel with its state and a switch, and a failed tunnel's reason in red."
+                loading="lazy"
+                decoding="async"
+              />
+</a>
+              <figcaption>Click the lamp: every tunnel, with a switch.</figcaption>
+            </figure>
+          </div>
         </section>
 
         <section className="close" aria-labelledby="close-title">
