@@ -183,7 +183,7 @@ export function LoginsView() {
           Add login
         </Button>
       </PageHeader>
-      <Banners />
+      <Banners logins={false} />
     <div className="flex flex-col gap-8 px-5 pb-5">
       <section className="flex flex-col gap-2">
         {logins.length === 0 ? (
@@ -198,7 +198,7 @@ export function LoginsView() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="border-l-3 border-l-transparent">Login</TableHead>
+                <TableHead>Login</TableHead>
                 <TableHead>Used by</TableHead>
                 <TableHead>Result</TableHead>
                 <TableHead>Detail</TableHead>
@@ -210,7 +210,7 @@ export function LoginsView() {
             <TableBody>
               {logins.map((l) => (
                 <TableRow key={l.name}>
-                  <TableCell className="border-l-3 border-l-transparent font-medium">{l.name}</TableCell>
+                  <TableCell className="font-medium">{l.name}</TableCell>
                   <TableCell className="text-muted-foreground">{l.profiles.join(", ") || "no profile"}</TableCell>
                   <TableCell className={cn("font-medium", RESULT[l.result])}>{l.checkable ? l.result : "no check"}</TableCell>
                   <TableCell className="w-full max-w-0">
@@ -253,7 +253,7 @@ export function LoginsView() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="border-l-3 border-l-transparent">Profile</TableHead>
+              <TableHead>Profile</TableHead>
               <TableHead>Login</TableHead>
               <TableHead>Environment</TableHead>
               <TableHead>
@@ -267,7 +267,7 @@ export function LoginsView() {
               const env = p.env && typeof p.env === "object" ? Object.keys(p.env as object) : [];
               return (
                 <TableRow key={name}>
-                  <TableCell className={cn("border-l-3 font-medium", p.production ? "border-l-production" : "border-l-transparent")}>
+                  <TableCell className="font-medium">
                     <span className="flex items-center gap-2">
                       {name}
                       {p.production === true && (
@@ -314,7 +314,7 @@ export function ActivityView() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Activity" note="Starts, stops, failures and reconnects, newest first." />
-      <Banners />
+      <Banners logins={false} />
     <div className="px-5 pb-5">
       {events.length === 0 ? (
         <Empty>
@@ -392,7 +392,7 @@ export function DoctorView() {
           Check again
         </Button>
       </PageHeader>
-      <Banners />
+      <Banners logins={false} />
     <div className="flex flex-col gap-4 px-5 pb-5">
       {sections.map((s) => (
         <section key={s} className="flex flex-col">
@@ -401,11 +401,9 @@ export function DoctorView() {
             {report!.rows
               .filter((r) => r.section === s)
               .map((r, i) => (
-                <li key={i} className="grid grid-cols-[5rem_14rem_1fr] gap-3 px-3 py-1.5">
+                <li key={i} className="grid grid-cols-[5rem_minmax(14rem,auto)_1fr] gap-3 px-3 py-1.5">
                   <span className={cn("font-medium", MARK[r.mark])}>{r.mark}</span>
-                  <span className="truncate" title={r.item}>
-                    {r.item}
-                  </span>
+                  <span className="break-all">{r.item}</span>
                   <span className="text-muted-foreground">{r.detail}</span>
                 </li>
               ))}
@@ -438,7 +436,7 @@ export function SettingsView() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Settings" />
-      <Banners />
+      <Banners logins={false} />
     <div className="flex max-w-[640px] flex-col gap-6 px-5 pb-5">
       <Field orientation="horizontal">
         <Switch id="autostart" checked={auto?.enabled ?? false} disabled={auto === null} onCheckedChange={(v) => void toggle(v)} />

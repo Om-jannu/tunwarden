@@ -40,7 +40,7 @@ function Logs({ name }: { name: string }) {
   const [follow, setFollow] = useState(true);
   const [filter, setFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -70,7 +70,9 @@ function Logs({ name }: { name: string }) {
   }, [lines, filter]);
 
   useEffect(() => {
-    if (follow) end.current?.scrollIntoView?.({ block: "end" });
+    // Scroll the log box only, never the pane around it.
+    const el = box.current;
+    if (follow && el) el.scrollTop = el.scrollHeight;
   }, [shown, follow]);
 
   return (
@@ -86,7 +88,7 @@ function Logs({ name }: { name: string }) {
           Copy last 100
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-[11.5px] leading-[1.55]" role="log" aria-live="off">
+      <div ref={box} className="min-h-[160px] flex-1 overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-[11.5px] leading-[1.55]" role="log" aria-live="off">
         {error && <p className="text-failed">{error}</p>}
         {shown.length === 0 && !error && <p className="text-muted-foreground">{filter ? "No lines match." : "Nothing logged yet."}</p>}
         {shown.map((l, i) => {
@@ -101,7 +103,6 @@ function Logs({ name }: { name: string }) {
             </div>
           );
         })}
-        <div ref={end} />
       </div>
     </div>
   );
@@ -169,7 +170,7 @@ export function TunnelPane() {
   return (
     <aside
       aria-label={`${t.name} details`}
-      className="flex w-[42%] max-w-[600px] min-w-[360px] shrink-0 flex-col gap-4 border-l bg-card px-5 pt-1 pb-4 motion-safe:animate-in motion-safe:slide-in-from-right-4 motion-safe:fade-in-0 motion-safe:duration-200"
+      className="flex min-h-0 w-[42%] max-w-[600px] min-w-[340px] shrink-0 flex-col gap-4 overflow-y-auto border-l bg-card px-5 pt-1 pb-4 motion-safe:animate-in motion-safe:slide-in-from-right-4 motion-safe:fade-in-0 motion-safe:duration-200"
     >
       <header className="flex items-start gap-3">
         <div className="flex min-w-0 flex-col gap-1">

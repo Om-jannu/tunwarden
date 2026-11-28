@@ -94,7 +94,7 @@ function Toolbar({ filter, setFilter }: { filter: string; setFilter: (s: string)
   );
 }
 
-export function Banners() {
+export function Banners({ logins = true }: { logins?: boolean }) {
   const failure = useStore((s) => s.failure);
   const configErrors = useStore((s) => s.configErrors);
   const expired = useStore((s) => s.expired);
@@ -140,7 +140,8 @@ export function Banners() {
           </AlertAction>
         </Alert>
       )}
-      {expired.map((l) => (
+      {logins &&
+        expired.map((l) => (
         <section
           key={l.name}
           aria-label={`The ${l.name} login has expired`}

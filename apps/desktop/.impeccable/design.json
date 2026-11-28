@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-28T10:40:00Z",
+  "title": "Design System: Tunwarden desktop app",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Ink",
+        "canonical": "#1d2420"
+      },
+      "plate-cream": {
+        "role": "primary",
+        "displayName": "Plate Cream",
+        "canonical": "#efe9d8"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f6f5f1"
+      },
+      "box": {
+        "role": "neutral",
+        "displayName": "Box",
+        "canonical": "#171e1b"
+      },
+      "running": {
+        "role": "tertiary",
+        "displayName": "Running",
+        "canonical": "#1e9e5a"
+      },
+      "busy": {
+        "role": "tertiary",
+        "displayName": "Connecting",
+        "canonical": "#b9770f"
+      },
+      "failed": {
+        "role": "tertiary",
+        "displayName": "Failed",
+        "canonical": "#d5483e"
+      },
+      "focus-amber": {
+        "role": "secondary",
+        "displayName": "Focus Amber",
+        "canonical": "#c7851a"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "lamp",
+        "value": "fill 400ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The lamp changing aspect."
+      },
+      {
+        "name": "state",
+        "value": "color 300ms ease-out",
+        "purpose": "State words and dots."
+      },
+      {
+        "name": "pane",
+        "value": "slide-in-from-right 200ms",
+        "purpose": "The detail pane opening."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "min-window",
+        "value": "760x480"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action in a region.",
+      "html": "<button class=\"ds-btn\">Add tunnel</button>",
+      "css": ".ds-btn{height:28px;padding:0 10px;border:0;border-radius:6.5px;background:#1d2420;color:#f6f5f1;font:500 12px system-ui,sans-serif;cursor:pointer}.ds-btn:hover{background:#2c3530}.ds-btn:focus-visible{outline:2px solid #c7851a;outline-offset:2px}"
+    },
+    {
+      "name": "Sidebar item",
+      "kind": "nav",
+      "refersTo": "sidebar-item",
+      "description": "A page in the sidebar, with its count.",
+      "html": "<a class=\"ds-nav\" aria-current=\"page\">Tunnels<span>2/6</span></a>",
+      "css": ".ds-nav{display:flex;align-items:center;height:32px;padding:0 10px;border-radius:6.5px;color:#1d2420;font:500 13px system-ui,sans-serif;background:rgb(29 36 32/.08);width:190px}.ds-nav span{margin-left:auto;color:#5b635d;font-size:12px}"
+    },
+    {
+      "name": "State label",
+      "kind": "chip",
+      "refersTo": "state-label",
+      "description": "A tunnel's state: dot and word in its colour.",
+      "html": "<span class=\"ds-state\"><i></i>reconnecting</span>",
+      "css": ".ds-state{display:inline-flex;align-items:center;gap:6px;color:#b9770f;font:500 13px system-ui,sans-serif}.ds-state i{width:6px;height:6px;border-radius:50%;background:currentColor}"
+    },
+    {
+      "name": "24-hour strip",
+      "kind": "custom",
+      "description": "A tunnel's last day in state colours.",
+      "html": "<div class=\"ds-strip\"><i style=\"flex:3;background:#cfcdc6\"></i><i style=\"flex:16;background:#1e9e5a\"></i><i style=\"flex:.3;background:#b9770f\"></i><i style=\"flex:4;background:#1e9e5a\"></i></div>",
+      "css": ".ds-strip{display:flex;width:132px;height:6px;border-radius:99px;overflow:hidden;background:#efeee8}.ds-strip i{display:block;height:100%}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Working Panel",
+    "overview": "The website is the signal box seen from outside; the app is the panel the warden actually works at. It keeps the box's green-grey and cream, its plate-like primary buttons and its three lamp aspects, and drops everything decorative.",
+    "keyCharacteristics": [
+      "Sidebar with counts instead of tabs; one title row per page.",
+      "Tunnels are dense rows grouped by profile; selecting one opens its log beside the list, never over it.",
+      "Green, amber and red mean tunnel state and nothing else, always beside the state word.",
+      "The pixel portal and warden appear only in the sidebar mark, the popover, first-run, empty states and the login-expired card."
+    ],
+    "rules": [
+      {
+        "name": "The Aspect Rule",
+        "body": "Green, amber and red mean running, connecting and failed. They never decorate, and each one sits next to the word it means.",
+        "section": "colors"
+      },
+      {
+        "name": "The Amber Focus Rule",
+        "body": "Focus rings and text selection are amber, the one colour that marks what you are acting on.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Display Type Rule",
+        "body": "Working screens use the system face only; the brand's display and plate faces stay on the website.",
+        "section": "typography"
+      },
+      {
+        "name": "The Beside, Not Over Rule",
+        "body": "Details open next to what they describe. Dialogs are for decisions and forms only.",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "Do pair every state colour with its word.",
+      "Do keep the window still: scroll inside regions.",
+      "Do open details beside the list.",
+      "Do keep production starts behind a confirmation everywhere."
+    ],
+    "donts": [
+      "Don't use blue or any accent for primary buttons; they are ink or cream plates.",
+      "Don't put coloured stripes down a row or card edge.",
+      "Don't put pixel art on working screens beyond the sidebar mark.",
+      "Don't repeat the login-expired card outside the Tunnels page."
+    ]
+  }
+}

@@ -13,9 +13,9 @@ import { useStore } from "@/store";
 function Main() {
   const view = useStore((s) => s.view);
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         {view === "tunnels" ? (
           <TunnelsView />
         ) : (
