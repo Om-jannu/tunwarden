@@ -45,7 +45,8 @@
           "x": 480,
           "y": 170
         }
-      }
+      },
+      "signingIdentity": "-"
     },
     "windows": {
       "webviewInstallMode": {
