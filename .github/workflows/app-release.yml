@@ -70,7 +70,7 @@ jobs:
           releaseName: Tunwarden ${{ inputs.tag }}
           releaseDraft: ${{ inputs.draft }}
           releaseBody: |
-            Desktop app installers. They are not signed yet: on macOS, open the app once with right-click → Open (or System Settings → Privacy & Security → Open Anyway); on Windows, choose More info → Run anyway.
+            Desktop app installers. They are not signed yet: on macOS, open the app once, then System Settings → Privacy & Security → Open Anyway; on Windows, choose More info → Run anyway.
       # The bundle must carry a complete (ad-hoc) signature: a partial one makes
       # macOS call the downloaded app "damaged" (tauri.bundle.conf.json,
       # signingIdentity "-"). Checks the .app inside the uploaded .dmg.

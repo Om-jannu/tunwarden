@@ -4,9 +4,9 @@
 export const release = {
   version: "0.1.0",
   // The CLI release (release.yml, started by a `vX.Y.Z` tag).
-  cli: false,
+  cli: true,
   // The desktop app (app-release.yml, started by hand for the same tag).
-  app: false,
+  app: true,
 };
 
 export const repo = "https://github.com/Om-jannu/tunwarden";

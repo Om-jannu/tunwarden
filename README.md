@@ -6,7 +6,7 @@ Tunwarden keeps your tunnels running. It starts SSH forwards and any command tha
 
 It runs on macOS, Linux and Windows. A small background daemon owns the tunnels, so they survive closing the terminal. There is no account, telemetry or network access of its own.
 
-> Status: early. The CLI and daemon work; the desktop app and sleep/wake handling are next.
+> Status: first release, 0.1.0. The CLI, the daemon and the desktop app run on macOS, Linux and Windows.
 
 ## Install
 
@@ -20,7 +20,7 @@ Archives for every platform are on the [releases page](https://github.com/Om-jan
 
 Tunwarden runs your own tools. Install ssh, gcloud, kubectl or whatever your tunnels use.
 
-**Desktop app:** installers for macOS (`.dmg`), Windows (`.msi`, `.exe`) and Linux (`.deb`, `.rpm`, AppImage) are on the releases page once published. The app includes the CLI. It is not signed yet: on macOS open it once with right-click → Open, on Windows choose More info → Run anyway. To build it yourself: `pnpm install`, then `pnpm desktop:build`.
+**Desktop app:** installers for macOS (`.dmg`), Windows (`.msi`, `.exe`) and Linux (`.deb`, `.rpm`, AppImage) are on the releases page. The app includes the CLI. It is not notarised or signed yet: on macOS, open it once, then go to System Settings → Privacy & Security and click Open Anyway; on Windows, choose More info → Run anyway. To build it yourself: `pnpm install`, then `pnpm desktop:build`.
 
 ## Quick start
 

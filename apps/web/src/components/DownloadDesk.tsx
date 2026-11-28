@@ -7,7 +7,7 @@ import { Command, useOs } from "./Install";
 const order: Os[] = ["macos", "windows", "linux"];
 
 const unsigned: Record<Os, string> = {
-  macos: "The app is not signed yet. Open it the first time with right-click → Open.",
+  macos: "The app is not notarised yet. Open it once, then go to System Settings → Privacy & Security and click Open Anyway.",
   windows: "The installer is not signed yet. If SmartScreen stops it, choose More info → Run anyway.",
   linux: "Install the .deb or .rpm with your package manager, or make the AppImage executable and run it.",
 };
