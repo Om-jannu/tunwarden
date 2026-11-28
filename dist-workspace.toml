@@ -23,3 +23,7 @@ installers = ["shell", "powershell"]
 install-path = "CARGO_HOME"
 install-updater = false
 pr-run-mode = "plan"
+# Build only the packages dist ships (tunwarden-cli), not the whole workspace:
+# the desktop crate needs GTK, which the Linux musl cross-builds do not have.
+# The app is released by app-release.yml.
+precise-builds = true
