@@ -65,10 +65,12 @@ describe("dashboard against the mock daemon", () => {
     await screen.findByText("staging-db");
     await act(async () => fireEvent.keyDown(window, { key: "k", metaKey: true }));
     const input = await screen.findByRole("combobox", { name: "Search commands" });
-    fireEvent.change(input, { target: { value: "stop staging" } });
-    expect(screen.getAllByRole("option")[0]?.textContent).toContain("Stop staging-db");
+    // Restart does not depend on the tunnel's state, which an earlier test's
+    // mock may still be changing.
+    fireEvent.change(input, { target: { value: "restart staging-db" } });
+    expect(screen.getAllByRole("option")[0]?.textContent).toContain("Restart staging-db");
     await act(async () => fireEvent.keyDown(input, { key: "Enter" }));
-    await waitFor(() => expect(calls).toEqual(["stop staging-db"]));
+    await waitFor(() => expect(calls).toEqual(["restart staging-db"]));
     await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
     await act(async () => fireEvent.keyDown(window, { key: "j" }));
     expect(useStore.getState().open).toBe("staging-db");

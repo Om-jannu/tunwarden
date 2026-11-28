@@ -42,6 +42,7 @@ pub fn run() {
             show(app)
         }))
         .plugin(tauri_plugin_notification::init())
+        .plugin(panel_plugin())
         .manage(bridge)
         .invoke_handler(tauri::generate_handler![
             bridge::config_info,
@@ -93,6 +94,10 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+            #[cfg(target_os = "macos")]
+            if let Some(p) = app.get_webview_window(POPOVER) {
+                macos::popover_as_menu(&p);
+            }
             if let Some(theme) = app.get_webview_window("main").and_then(|w| w.theme().ok()) {
                 set_theme(app.handle(), theme);
             }
@@ -105,6 +110,15 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             // The popover closes as soon as it loses focus, like a menu.
             WindowEvent::Focused(false) if window.label() == POPOVER => {
+                // A blur right after opening is the other app still handing
+                // over focus, not the user clicking away.
+                let just_shown = SHOWN_AT
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(400));
+                if just_shown {
+                    return;
+                }
                 if window.is_visible().unwrap_or(false) {
                     *BLURRED_AT.lock().unwrap_or_else(|e| e.into_inner()) =
                         Some(std::time::Instant::now());
@@ -140,10 +154,20 @@ fn set_theme<R: Runtime>(app: &AppHandle<R>, theme: tauri::Theme) {
 
 const POPOVER: &str = "popover";
 
+/// macOS turns the popover into a panel (tauri-nspanel); elsewhere a no-op.
+fn panel_plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    #[cfg(target_os = "macos")]
+    return macos::plugin();
+    #[cfg(not(target_os = "macos"))]
+    tauri::plugin::Builder::new("tunwarden-panel").build()
+}
+
 /// When the popover last hid because it lost focus. Clicking the tray icon to
 /// close it first takes its focus, then delivers the click: without this the
 /// click would open it again at once.
 static BLURRED_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+/// When the popover was last opened.
+static SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
 /// Shows the popover next to the tray icon, or hides it when it is open.
 /// It opens below an icon in a top bar (macOS) and above one in a bottom
@@ -186,8 +210,118 @@ fn toggle_popover<R: Runtime>(app: &AppHandle<R>, icon: Rect) {
         y = y.clamp(top + gap, (bottom - ph - gap).max(top + gap));
     }
     let _ = w.set_position(PhysicalPosition::new(x, y));
-    let _ = w.show();
-    let _ = w.set_focus();
+    *SHOWN_AT.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::time::Instant::now());
+    // macOS: shown as a non-activating panel on the Space in front, so it
+    // opens over other apps, full-screen ones included.
+    #[cfg(target_os = "macos")]
+    macos::show_on_active_space(&w);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    use objc2::MainThreadMarker;
+    use tauri_nspanel::WebviewWindowExt;
+
+    use panel::PopoverPanel;
+
+    /// The popover's panel class (the macro brings its own AppKit imports).
+    mod panel {
+        tauri_nspanel::tauri_panel! {
+            panel!(PopoverPanel {
+                config: {
+                    can_become_key_window: true,
+                    is_floating_panel: true
+                }
+            })
+        }
+    }
+
+    use objc2_app_kit::{
+        NSApplication, NSPopUpMenuWindowLevel, NSWindow, NSWindowCollectionBehavior,
+    };
+    use tauri::{Manager, Runtime, WebviewWindow};
+
+    pub fn plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
+        tauri_nspanel::init()
+    }
+
+    /// Set once the popover window has become a panel (`popover_as_menu`).
+    static PANEL: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
+    fn with_ns_window<R: Runtime>(
+        w: &WebviewWindow<R>,
+        f: impl FnOnce(&NSWindow) + Send + 'static,
+    ) {
+        let Ok(ptr) = w.ns_window() else {
+            return;
+        };
+        let ptr = ptr as usize;
+        let _ = w.run_on_main_thread(move || {
+            // SAFETY: Tauri's NSWindow for this window, used on the main
+            // thread while the window exists (it is never destroyed: the
+            // popover only hides).
+            #[expect(unsafe_code, reason = "AppKit window settings Tauri does not expose")]
+            let ns = unsafe { &*(ptr as *const NSWindow) };
+            f(ns);
+        });
+    }
+
+    /// Turns the popover into a non-activating panel (once), at menu level, on
+    /// every Space and over full-screen apps, kept when the app is not active.
+    pub fn popover_as_menu<R: Runtime>(w: &WebviewWindow<R>) {
+        if PANEL.get().is_none() {
+            match w.to_panel::<PopoverPanel<R>>() {
+                Ok(panel) => {
+                    // Non-activating: showing it neither activates Tunwarden
+                    // nor moves to Tunwarden's Space.
+                    if let Err(e) =
+                        panel.add_style_mask(objc2_app_kit::NSWindowStyleMask::NonactivatingPanel)
+                    {
+                        eprintln!("tunwarden-desktop: popover panel style: {e:?}");
+                    }
+                    let _ = PANEL.set(());
+                }
+                Err(e) => eprintln!("tunwarden-desktop: popover panel: {e}"),
+            }
+        }
+        with_ns_window(w, |ns| {
+            ns.setLevel(NSPopUpMenuWindowLevel);
+            ns.setCollectionBehavior(
+                ns.collectionBehavior()
+                    | NSWindowCollectionBehavior::CanJoinAllSpaces
+                    | NSWindowCollectionBehavior::FullScreenAuxiliary
+                    | NSWindowCollectionBehavior::Transient
+                    | NSWindowCollectionBehavior::IgnoresCycle,
+            );
+            ns.setHidesOnDeactivate(false);
+        });
+    }
+
+    /// Orders the popover to the front on the main thread. Only when the panel
+    /// could not be made does it activate Tunwarden (the older fallback).
+    pub fn show_on_active_space<R: Runtime>(w: &WebviewWindow<R>) {
+        let w = w.clone();
+        let app = w.app_handle().clone();
+        let _ = app.run_on_main_thread(move || {
+            popover_as_menu(&w);
+            let panel = PANEL.get().is_some();
+            with_ns_window(&w, move |ns| {
+                // A non-activating panel takes key focus on its own; activating
+                // the app would switch to Tunwarden's Space instead.
+                if !panel && let Some(mtm) = MainThreadMarker::new() {
+                    #[allow(deprecated, reason = "activate() needs macOS 14; the app supports 11")]
+                    NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+                }
+                ns.orderFrontRegardless();
+                ns.makeKeyAndOrderFront(None);
+            });
+        });
+    }
 }
 
 /// From the popover: opens the main window, optionally straight into a login.

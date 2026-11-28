@@ -36,7 +36,8 @@
           "effects": [
             "acrylic"
           ]
-        }
+        },
+        "visibleOnAllWorkspaces": true
       }
     ]
   }

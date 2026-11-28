@@ -81,7 +81,7 @@ logged in; restarting prod-api, staging-db
 
 `init`, `import`, `list`, `status`, `start`, `stop`, `restart`, `logs`, `show-command`, `add`, `edit`, `remove`, `auth`, `login`, `trust`, `doctor`, `daemon`, `autostart`, `config-path`, `completions`. Run `tunwarden <command> --help` for details and examples. `start` and `stop` take names, `--group`, `--profile` or `--all`.
 
-On a terminal, a command missing its tunnel or login name shows a list to pick from (`tunwarden start`, `tunwarden logs`, `tunwarden login`), `tunwarden add` asks for each field, and `start` shows a live line per tunnel. In scripts and pipes nothing asks or animates, colours are off, and a missing name is an error listing the choices. `NO_COLOR=1` turns colours off everywhere. The pixel warden appears at a few moments (a bare `tunwarden`, `init`, `doctor`, a login that brings tunnels back, `daemon stop`), only on a colour terminal; `TUNWARDEN_NO_ART=1` turns it off.
+On a terminal, a command missing its tunnel or login name shows a list to pick from (`tunwarden start`, `tunwarden logs`, `tunwarden login`), `tunwarden add` asks for each field, and `start` shows a live line per tunnel. In scripts and pipes nothing asks or animates, colours are off, and a missing name is an error listing the choices. `NO_COLOR=1` turns colours off everywhere.
 
 Shell completion knows your tunnel, group, profile and login names:
 

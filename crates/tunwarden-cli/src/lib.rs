@@ -1,7 +1,6 @@
 //! The `tunwarden` command line (PRD 7.7). Kept in a library so the system
 //! tests can run exactly this code next to their fake tunnels.
 
-mod art;
 mod table;
 mod ui;
 
@@ -327,35 +326,27 @@ where
     }
 }
 
-/// A bare `tunwarden`: the waving warden and where to start.
+/// A bare `tunwarden`: what it is and where to start.
 fn welcome() -> ExitCode {
     let b = |s: &str| ui::paint(ui::BOLD, s);
-    art::say(
-        &art::WARDEN_WAVE,
-        art::UNLIT,
-        &[
-            format!("{} keeps your tunnels running.", b("Tunwarden")),
-            String::new(),
-            format!(
-                "  {}           write an example config",
-                b("tunwarden init")
-            ),
-            format!(
-                "  {}  turn your tunnel aliases into entries",
-                b("tunwarden import ~/.zshrc")
-            ),
-            format!(
-                "  {}          start, then see what runs",
-                b("tunwarden start")
-            ),
-            format!(
-                "  {}         check tools, logins and ports",
-                b("tunwarden doctor")
-            ),
-            String::new(),
-            format!("Every command: {}", b("tunwarden --help")),
-        ],
-    );
+    const START: [(&str, &str); 4] = [
+        ("tunwarden init", "write an example config"),
+        (
+            "tunwarden import ~/.zshrc",
+            "turn your tunnel aliases into entries",
+        ),
+        ("tunwarden start", "start, then see what runs"),
+        ("tunwarden doctor", "check tools, logins and ports"),
+    ];
+    let width = START.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
+    println!("{} keeps your tunnels running.", b("Tunwarden"));
+    println!();
+    for (command, what) in START {
+        // Padded before painting, so the colour codes do not count as width.
+        println!("  {}  {what}", b(&format!("{command:<width$}")));
+    }
+    println!();
+    println!("Every command: {}", b("tunwarden --help"));
     ExitCode::SUCCESS
 }
 
@@ -525,14 +516,9 @@ fn init(ctx: &Ctx) -> Outcome {
     }
     std::fs::write(&ctx.config, EXAMPLE_CONFIG)
         .map_err(|e| format!("cannot write {}: {e}", ctx.config.display()))?;
-    art::say(
-        &art::WARDEN_WAVE,
-        art::UNLIT,
-        &[
-            format!("created {}", ctx.config.display()),
-            "Replace the example logins, profiles and tunnels with your own, then run `tunwarden list`."
-                .to_owned(),
-        ],
+    println!("created {}", ctx.config.display());
+    println!(
+        "Replace the example logins, profiles and tunnels with your own, then run `tunwarden list`."
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -1284,18 +1270,10 @@ async fn doctor(ctx: &Ctx) -> Outcome {
     let problems = print_report(&report);
     println!();
     if problems {
-        art::say(
-            &art::WARDEN_LANTERN,
-            art::FAILED,
-            &["Something needs fixing: see the problems above.".to_owned()],
-        );
+        println!("Something needs fixing: see the problems above.");
         Ok(ExitCode::FAILURE)
     } else {
-        art::say(
-            &art::WARDEN_LANTERN,
-            art::RUNNING,
-            &["All clear.".to_owned()],
-        );
+        println!("All clear.");
         Ok(ExitCode::SUCCESS)
     }
 }
@@ -1691,14 +1669,7 @@ async fn login(ctx: &Ctx, name: &str) -> Outcome {
             if result.restarted.is_empty() {
                 println!("logged in; no tunnels were waiting for this login");
             } else {
-                art::say(
-                    &art::WARDEN_LANTERN,
-                    art::RUNNING,
-                    &[format!(
-                        "logged in; restarting {}",
-                        result.restarted.join(", ")
-                    )],
-                );
+                println!("logged in; restarting {}", result.restarted.join(", "));
             }
         }
         Err(ClientError::NotRunning) => match gauth::check(login, &config.tools).await {
@@ -1764,11 +1735,7 @@ async fn daemon_command(ctx: &Ctx, cmd: DaemonCommand) -> Outcome {
                 } else {
                     ""
                 };
-                art::say(
-                    &art::WARDEN_REST,
-                    art::UNLIT,
-                    &[format!("daemon stopped{extra}")],
-                );
+                println!("daemon stopped{extra}");
             } else {
                 println!("daemon is not running");
             }

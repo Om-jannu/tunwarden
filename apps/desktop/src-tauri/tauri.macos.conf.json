@@ -45,7 +45,8 @@
           ],
           "state": "active",
           "radius": 12
-        }
+        },
+        "visibleOnAllWorkspaces": true
       }
     ]
   }

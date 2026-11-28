@@ -29,3 +29,10 @@ toml = "1.2.3"
 tunwarden-core = { path = "../../../crates/tunwarden-core" }
 which = "8.0.6"
 tauri-plugin-single-instance = "2.5.5"
+
+# The tray popover behaves like a menu on macOS: a non-activating panel at
+# menu level, on every Space and over full-screen apps (src/lib.rs, mod macos).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSWindow", "NSGraphics", "NSRunningApplication"] }
+tauri-nspanel = "2.1.1"

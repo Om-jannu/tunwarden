@@ -3,9 +3,9 @@ name: Website
 # site, the desktop app and the CLI matches docs/brand/concepts/make.py.
 on:
   push:
-    paths: ["apps/web/**", "docs/brand/**", "apps/desktop/src/art/**", "crates/tunwarden-cli/src/art/**", "pnpm-lock.yaml", ".github/workflows/web.yml"]
+    paths: ["apps/web/**", "docs/brand/**", "apps/desktop/src/art/**", "pnpm-lock.yaml", ".github/workflows/web.yml"]
   pull_request:
-    paths: ["apps/web/**", "docs/brand/**", "apps/desktop/src/art/**", "crates/tunwarden-cli/src/art/**", "pnpm-lock.yaml", ".github/workflows/web.yml"]
+    paths: ["apps/web/**", "docs/brand/**", "apps/desktop/src/art/**", "pnpm-lock.yaml", ".github/workflows/web.yml"]
 permissions:
   contents: read
 jobs:
@@ -23,7 +23,7 @@ jobs:
         # Text outputs only: PNG bytes depend on the zlib build.
         run: |
           python3 docs/brand/export.py
-          git diff --exit-code apps/web/src/art/pixels.ts apps/desktop/src/art/pixels.ts crates/tunwarden-cli/src/art/drawings.rs
+          git diff --exit-code apps/web/src/art/pixels.ts apps/desktop/src/art/pixels.ts
       - run: pnpm --filter tunwarden-web typecheck
       - run: pnpm --filter tunwarden-web build
         env:
