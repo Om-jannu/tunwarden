@@ -19,6 +19,11 @@ type Store = {
   expired: LoginView[];
   logins: LoginView[];
   activity: ActivityEvent[];
+  /** The daemon's recent activity (oldest first), for the 24-hour strips. */
+  history: ActivityEvent[];
+  /** Whether `history` holds every event the daemon kept, not a cut-off part. */
+  historyComplete: boolean;
+  loadHistory(): Promise<void>;
   view: View;
   editing: Editing | null;
   /** The login whose `login` command runs in the app now. */
@@ -41,6 +46,8 @@ type Store = {
 };
 
 let notifier: Notifier | null = null;
+/** As many events as the daemon keeps in memory (core logs::RECENT_EVENTS). */
+const HISTORY = 500;
 
 export const useStore = create<Store>((set, get) => ({
   phase: "loading",
@@ -52,6 +59,8 @@ export const useStore = create<Store>((set, get) => ({
   expired: [],
   logins: [],
   activity: [],
+  history: [],
+  historyComplete: false,
   view: "tunnels",
   editing: null,
   loggingIn: null,
@@ -69,6 +78,7 @@ export const useStore = create<Store>((set, get) => ({
         case "connected":
           set({ tunnels: e.status.tunnels, configErrors: e.status.config_errors, version: e.version, failure: null });
           void loadLogins();
+          void get().loadHistory();
           break;
         case "disconnected":
           set({ tunnels: null, failure: e.failure });
@@ -87,7 +97,7 @@ export const useStore = create<Store>((set, get) => ({
           break;
         }
         case "activity":
-          set((s) => ({ activity: [...s.activity, e.event].slice(-500) }));
+          set((s) => ({ activity: [...s.activity, e.event].slice(-500), history: [...s.history, e.event] }));
           break;
       }
     });
@@ -98,12 +108,16 @@ export const useStore = create<Store>((set, get) => ({
     if (get().tunnels === null) {
       try {
         const s = await a.status();
-        if (get().tunnels === null) set({ tunnels: s.tunnels, configErrors: s.config_errors, failure: null });
+        if (get().tunnels === null) {
+          set({ tunnels: s.tunnels, configErrors: s.config_errors, failure: null });
+          void get().loadHistory();
+        }
       } catch {
         // Left to the watcher.
       }
     }
     await a.onQuitRequested(() => set({ quitOpen: true }));
+    await a.onOpenLogin((name) => set({ view: "logins", loggingIn: name }));
     await a.onConfirmStart((c) => set({ confirm: { action: "start", selector: c.selector, production: c.production } }));
   },
 
@@ -117,6 +131,14 @@ export const useStore = create<Store>((set, get) => ({
   setView: (view) => set({ view }),
   edit: (editing) => set({ editing }),
   loadLogins: () => loadLogins(),
+  async loadHistory() {
+    try {
+      const r = await (await api()).activity(HISTORY);
+      set({ history: r.events, historyComplete: r.events.length < HISTORY });
+    } catch {
+      // The strips show what the live events give.
+    }
+  },
   setQuitOpen: (quitOpen) => set({ quitOpen }),
   cancelConfirm: () => set({ confirm: null }),
 

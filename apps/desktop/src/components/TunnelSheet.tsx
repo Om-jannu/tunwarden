@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CopyIcon, PencilIcon, PlayIcon, RotateCwIcon, SquareIcon, Trash2Icon } from "lucide-react";
+import { CopyIcon, PencilIcon, PlayIcon, RotateCwIcon, SquareIcon, Trash2Icon, XIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,11 +17,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/api";
 import { detail, isActive, uptime } from "@/logic";
 import { one, useStore } from "@/store";
 import { Address, StateLabel, copy } from "./Dashboard";
+import { StateStrip } from "./StateStrip";
 
 const SHOWN = 2000;
 
@@ -144,75 +144,86 @@ function RemoveTunnel({ name, running }: { name: string; running: boolean }) {
   );
 }
 
-export function TunnelSheet() {
-  const open = useStore((s) => s.open);
+/** The selected tunnel, beside the list: its state, command facts, actions
+ *  and live log. Esc or the close button deselects it. */
+export function TunnelPane() {
   const t = useStore((s) => s.tunnels?.find((x) => x.name === s.open) ?? null);
   const setOpen = useStore((s) => s.setOpen);
   const act = useStore((s) => s.act);
-  const facts: [string, React.ReactNode][] = t
-    ? [
-        ["Type", t.type],
-        ["Profile", t.profile ?? "none"],
-        ["Groups", t.groups.join(", ") || "none"],
-        ["PID", t.pid ?? "—"],
-        ["Uptime", t.state === "running" ? uptime(t.since) : "—"],
-        ["Restarts", t.restarts],
-      ]
-    : [];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector("[role=dialog],[role=alertdialog]")) setOpen(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setOpen]);
+  if (!t) return null;
+  const facts: [string, React.ReactNode][] = [
+    ["Type", t.type],
+    ["Profile", t.profile ?? "none"],
+    ["Groups", t.groups.join(", ") || "none"],
+    ["PID", t.pid ?? "—"],
+    ["Uptime", t.state === "running" ? uptime(t.since) : "—"],
+    ["Restarts", t.restarts],
+  ];
   return (
-    <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
-      <SheetContent side="right" className="flex flex-col gap-4 data-[side=right]:w-[min(720px,92vw)] data-[side=right]:sm:max-w-none">
-        {t && (
-          <>
-            <SheetHeader className="gap-1.5 pb-0">
-              <SheetTitle className="flex items-center gap-3 text-[15px]">
-                {t.name}
-                <StateLabel state={t.state} />
-              </SheetTitle>
-              <SheetDescription className="flex flex-wrap gap-3">
-                {t.local.map((a) => (
-                  <Address key={a} value={a} />
-                ))}
-              </SheetDescription>
-            </SheetHeader>
-            <div className="flex flex-col gap-4 px-4 pb-4 min-h-0 flex-1">
-              <div className="flex gap-2">
-                {isActive(t) ? (
-                  <Button size="sm" variant="outline" onClick={() => void act("stop", one(t.name))}>
-                    <SquareIcon data-icon="inline-start" />
-                    Stop
-                  </Button>
-                ) : (
-                  <Button size="sm" onClick={() => void act("start", one(t.name))}>
-                    <PlayIcon data-icon="inline-start" />
-                    Start
-                  </Button>
-                )}
-                <Button size="sm" variant="outline" onClick={() => void act("restart", one(t.name))}>
-                  <RotateCwIcon data-icon="inline-start" />
-                  {t.pending_restart ? "Restart to apply changes" : "Restart"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => useStore.getState().edit({ table: "tunnels", name: t.name })}>
-                  <PencilIcon data-icon="inline-start" />
-                  Edit
-                </Button>
-                <RemoveTunnel name={t.name} running={isActive(t)} />
-              </div>
-              {detail(t) && <p className={cn(t.state === "failed" ? "text-failed" : "text-muted-foreground")}>{detail(t)}</p>}
-              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
-                {facts.map(([k, v]) => (
-                  <div key={k} className="contents">
-                    <dt className="text-muted-foreground">{k}</dt>
-                    <dd className="tabular-nums">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-              <Separator />
-              <Logs name={t.name} />
-            </div>
-          </>
+    <aside
+      aria-label={`${t.name} details`}
+      className="flex w-[42%] max-w-[600px] min-w-[360px] shrink-0 flex-col gap-4 border-l bg-card px-5 pt-1 pb-4 motion-safe:animate-in motion-safe:slide-in-from-right-4 motion-safe:fade-in-0 motion-safe:duration-200"
+    >
+      <header className="flex items-start gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 className="flex items-center gap-3 text-[15px] font-semibold">
+            <span className="truncate">{t.name}</span>
+            <StateLabel state={t.state} />
+          </h3>
+          <span className="flex flex-wrap gap-3">
+            {t.local.map((a) => (
+              <Address key={a} value={a} />
+            ))}
+          </span>
+        </div>
+        <Button variant="ghost" size="icon" className="ml-auto shrink-0" aria-label="Close details" title="Close (Esc)" onClick={() => setOpen(null)}>
+          <XIcon />
+        </Button>
+      </header>
+      <div className="flex flex-wrap gap-1.5">
+        {isActive(t) ? (
+          <Button size="sm" variant="outline" onClick={() => void act("stop", one(t.name))}>
+            <SquareIcon data-icon="inline-start" />
+            Stop
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => void act("start", one(t.name))}>
+            <PlayIcon data-icon="inline-start" />
+            Start
+          </Button>
         )}
-      </SheetContent>
-    </Sheet>
+        <Button size="sm" variant="outline" onClick={() => void act("restart", one(t.name))}>
+          <RotateCwIcon data-icon="inline-start" />
+          {t.pending_restart ? "Restart to apply changes" : "Restart"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => useStore.getState().edit({ table: "tunnels", name: t.name })}>
+          <PencilIcon data-icon="inline-start" />
+          Edit
+        </Button>
+        <RemoveTunnel name={t.name} running={isActive(t)} />
+      </div>
+      {detail(t) && <p className={cn(t.state === "failed" ? "text-failed" : "text-muted-foreground")}>{detail(t)}</p>}
+      <section aria-label="Last 24 hours" className="flex flex-col gap-1.5">
+        <h4 className="text-[12px] font-semibold tracking-[0.02em] text-muted-foreground uppercase">Last 24 hours</h4>
+        <StateStrip t={t} size="pane" />
+      </section>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+        {facts.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="tabular-nums">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <Separator />
+      <Logs name={t.name} />
+    </aside>
   );
 }

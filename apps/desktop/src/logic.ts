@@ -1,6 +1,6 @@
 // Pure rules the screens use: grouping, health, notifications (FR-31,
 // FR-33, FR-35). Kept free of React so they are easy to test.
-import type { State, TunnelView } from "./protocol";
+import type { ActivityEvent, State, TunnelView } from "./protocol";
 
 export type Health = "idle" | "good" | "busy" | "bad";
 
@@ -152,4 +152,60 @@ function describe(events: Event[]): Notice {
     case "reconnecting":
       return { title: `${who} reconnecting`, body: list };
   }
+}
+
+/** A stretch of a tunnel's state; "unknown" where the activity log has no record. */
+export type Segment = { state: State | "unknown"; start: number; end: number };
+
+export const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * A tunnel's states over the `span` before `now`, from the activity log.
+ * `events` are all tunnels' events, oldest first. When the log may have been
+ * cut off (`complete` false), the time before its oldest event is unknown.
+ */
+export function timeline(events: ActivityEvent[], name: string, current: State, now: number, complete: boolean, span = DAY): Segment[] {
+  const windowStart = now - span;
+  const oldest = events.length ? Date.parse(events[0]!.time) : now;
+  const start = complete ? windowStart : Math.max(windowStart, Math.min(oldest, now));
+  const mine = events.filter((e) => e.tunnel === name).map((e) => ({ ...e, at: Date.parse(e.time) }));
+  const before = mine.filter((e) => e.at <= start).at(-1);
+  const after = mine.filter((e) => e.at > start && e.at <= now);
+  let state: State = before?.to ?? after[0]?.from ?? current;
+  const out: Segment[] = [];
+  if (start > windowStart) out.push({ state: "unknown", start: windowStart, end: start });
+  let cursor = start;
+  for (const e of after) {
+    if (e.at > cursor) out.push({ state, start: cursor, end: e.at });
+    cursor = Math.max(cursor, e.at);
+    state = e.to;
+  }
+  if (now > cursor) out.push({ state, start: cursor, end: now });
+  // Join neighbours in the same state.
+  return out.reduce<Segment[]>((acc, seg) => {
+    const last = acc.at(-1);
+    if (last && last.state === seg.state && last.end === seg.start) last.end = seg.end;
+    else acc.push({ ...seg });
+    return acc;
+  }, []);
+}
+
+/** "running 22h 10m, failed 1h 2m, stopped 48m": how long in each state. */
+export function timelineSummary(segments: Segment[]): string {
+  const total = new Map<string, number>();
+  for (const s of segments) {
+    const k = s.state === "starting" || s.state === "reconnecting" || s.state === "unhealthy" ? "connecting" : s.state === "unknown" ? "no record" : s.state;
+    total.set(k, (total.get(k) ?? 0) + (s.end - s.start));
+  }
+  return [...total.entries()]
+    .filter(([, ms]) => ms >= 60_000)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, ms]) => `${k} ${span(ms)}`)
+    .join(", ");
+}
+
+function span(ms: number): string {
+  const m = Math.round(ms / 60_000);
+  const h = Math.floor(m / 60);
+  return h ? (m % 60 ? `${h}h ${m % 60}m` : `${h}h`) : `${m}m`;
 }

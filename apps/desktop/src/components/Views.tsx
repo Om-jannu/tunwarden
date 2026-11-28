@@ -27,7 +27,8 @@ import { api, asFailure, type AutostartInfo, type ConfigEntries } from "@/api";
 import type { TableName } from "@/forms";
 import type { Mark, Report } from "@/protocol";
 import { useStore } from "@/store";
-import { StateLabel } from "./Dashboard";
+import { Banners, StateLabel } from "./Dashboard";
+import { PageHeader } from "./Shell";
 
 const RESULT: Record<string, string> = {
   ok: "text-running",
@@ -171,22 +172,20 @@ export function LoginsView() {
   };
 
   return (
-    <div className="flex flex-col gap-8 p-5">
+    <div className="flex flex-col">
+      <PageHeader title="Logins" note="Checked every few minutes while a tunnel uses them.">
+        <Button variant="outline" size="sm" disabled={checking} onClick={() => void checkNow()}>
+          {checking ? <Spinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
+          Check now
+        </Button>
+        <Button size="sm" onClick={() => edit({ table: "logins", name: null })}>
+          <PlusIcon data-icon="inline-start" />
+          Add login
+        </Button>
+      </PageHeader>
+      <Banners />
+    <div className="flex flex-col gap-8 px-5 pb-5">
       <section className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="text-[15px] font-semibold">Logins</h2>
-          <span className="text-muted-foreground">Checked every few minutes while a tunnel uses them.</span>
-          <span className="ml-auto flex gap-2">
-            <Button variant="outline" size="sm" disabled={checking} onClick={() => void checkNow()}>
-              {checking ? <Spinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
-              Check now
-            </Button>
-            <Button size="sm" onClick={() => edit({ table: "logins", name: null })}>
-              <PlusIcon data-icon="inline-start" />
-              Add login
-            </Button>
-          </span>
-        </div>
         {logins.length === 0 ? (
           <Empty className="border">
             <EmptyHeader>
@@ -244,7 +243,7 @@ export function LoginsView() {
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-[15px] font-semibold">Profiles</h2>
+          <h3 className="text-[12px] font-semibold tracking-[0.02em] text-muted-foreground uppercase">Profiles</h3>
           <span className="text-muted-foreground">Environment, a login and the production flag, shared by tunnels.</span>
           <Button size="sm" className="ml-auto" onClick={() => edit({ table: "profiles", name: null })}>
             <PlusIcon data-icon="inline-start" />
@@ -297,6 +296,7 @@ export function LoginsView() {
         </Table>
       </section>
     </div>
+    </div>
   );
 }
 
@@ -312,7 +312,10 @@ export function ActivityView() {
   const seen = new Set(past.map((e) => `${e.time}${e.tunnel}`));
   const events = [...past, ...live.filter((e) => !seen.has(`${e.time}${e.tunnel}`))].reverse();
   return (
-    <div className="p-5">
+    <div className="flex flex-col">
+      <PageHeader title="Activity" note="Starts, stops, failures and reconnects, newest first." />
+      <Banners />
+    <div className="px-5 pb-5">
       {events.length === 0 ? (
         <Empty>
           <EmptyHeader>
@@ -358,6 +361,7 @@ export function ActivityView() {
         </Table>
       )}
     </div>
+    </div>
   );
 }
 
@@ -378,17 +382,18 @@ export function DoctorView() {
   const sections = [...new Set((report?.rows ?? []).map((r) => r.section))];
   const problems = (report?.rows ?? []).filter((r) => r.mark === "problem").length;
   return (
-    <div className="flex flex-col gap-4 p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-[15px] font-semibold">Doctor</h2>
-        <span className="text-muted-foreground">
-          {report === null ? "Checking the config, daemon, tools, logins and ports" : problems === 0 ? "No problems found." : `${problems} ${problems === 1 ? "problem" : "problems"} to fix.`}
-        </span>
-        <Button variant="outline" size="sm" className="ml-auto" disabled={running} onClick={() => void run()}>
+    <div className="flex flex-col">
+      <PageHeader
+        title="Doctor"
+        note={report === null ? "Checking the config, daemon, tools, logins and ports" : problems === 0 ? "No problems found." : `${problems} ${problems === 1 ? "problem" : "problems"} to fix.`}
+      >
+        <Button variant="outline" size="sm" disabled={running} onClick={() => void run()}>
           {running ? <Spinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
           Check again
         </Button>
-      </div>
+      </PageHeader>
+      <Banners />
+    <div className="flex flex-col gap-4 px-5 pb-5">
       {sections.map((s) => (
         <section key={s} className="flex flex-col">
           <h3 className="pb-1 font-semibold">{s}</h3>
@@ -407,6 +412,7 @@ export function DoctorView() {
           </ul>
         </section>
       ))}
+    </div>
     </div>
   );
 }
@@ -430,8 +436,10 @@ export function SettingsView() {
     }
   };
   return (
-    <div className="flex max-w-[640px] flex-col gap-6 p-5">
-      <h2 className="text-[15px] font-semibold">Settings</h2>
+    <div className="flex flex-col">
+      <PageHeader title="Settings" />
+      <Banners />
+    <div className="flex max-w-[640px] flex-col gap-6 px-5 pb-5">
       <Field orientation="horizontal">
         <Switch id="autostart" checked={auto?.enabled ?? false} disabled={auto === null} onCheckedChange={(v) => void toggle(v)} />
         <div className="flex flex-col gap-0.5">
@@ -467,6 +475,7 @@ export function SettingsView() {
           Open in editor
         </Button>
       </div>
+    </div>
     </div>
   );
 }

@@ -54,78 +54,106 @@
 }
 
 :root {
-    /* Cool slate surfaces; colour is kept for tunnel state (docs/desktop.md). */
-    --background: #f4f6f9;
-    --foreground: #17202b;
+    /* The signal box, as a working panel (apps/web/DESIGN.md): neutrals tinted
+       from its green-grey, primary actions are plates (ink on paper here,
+       cream on ink in dark), focus is amber, and green, amber and red are
+       kept for tunnel state. */
+    --background: #f6f5f1;
+    --foreground: #1d2420;
     --card: #ffffff;
-    --card-foreground: #17202b;
+    --card-foreground: #1d2420;
     --popover: #ffffff;
-    --popover-foreground: #17202b;
-    --primary: #2350b8;
-    --primary-foreground: #ffffff;
-    --secondary: #e8ecf1;
-    --secondary-foreground: #17202b;
-    --muted: #edf0f4;
-    --muted-foreground: #5a6576;
-    --accent: #e6ebf2;
-    --accent-foreground: #17202b;
+    --popover-foreground: #1d2420;
+    --primary: #1d2420;
+    --primary-foreground: #f6f5f1;
+    --secondary: #ecebe5;
+    --secondary-foreground: #1d2420;
+    --muted: #efeee8;
+    --muted-foreground: #5b635d;
+    --accent: #e9e8e1;
+    --accent-foreground: #1d2420;
     --destructive: #c8392f;
-    --border: #dce1e8;
-    --input: #d3d9e1;
-    --ring: #2350b8;
+    --border: #e1dfd7;
+    --input: #d6d4ca;
+    --ring: #c7851a;
     --radius: 0.5rem;
     --state-running: #1e9e5a;
-    --state-busy: #c7851a;
+    --state-busy: #b9770f;
     --state-failed: #d5483e;
-    --state-stopped: #8c96a5;
+    --state-stopped: #8b938d;
     --production: #8b45d2;
-    --chart-1: #2350b8;
+    --chart-1: #1d2420;
     --chart-2: #1e9e5a;
-    --chart-3: #c7851a;
+    --chart-3: #b9770f;
     --chart-4: #d5483e;
     --chart-5: #8b45d2;
-    --sidebar: #eef1f5;
-    --sidebar-foreground: #17202b;
-    --sidebar-primary: #2350b8;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #e6ebf2;
-    --sidebar-accent-foreground: #17202b;
-    --sidebar-border: #dce1e8;
-    --sidebar-ring: #2350b8;
+    --sidebar: #ecebe4;
+    --sidebar-foreground: #1d2420;
+    --sidebar-primary: #1d2420;
+    --sidebar-primary-foreground: #f6f5f1;
+    --sidebar-accent: rgb(29 36 32 / 0.08);
+    --sidebar-accent-foreground: #1d2420;
+    --sidebar-border: #e1dfd7;
+    --sidebar-ring: #c7851a;
+    --selection: rgb(199 133 26 / 0.28);
 }
 
 .dark {
-    --background: #12171e;
-    --foreground: #e3e8ef;
-    --card: #181e27;
-    --card-foreground: #e3e8ef;
-    --popover: #1b222c;
-    --popover-foreground: #e3e8ef;
-    --primary: #6e95f0;
-    --primary-foreground: #0e1420;
-    --secondary: #222a35;
-    --secondary-foreground: #e3e8ef;
-    --muted: #1e252f;
-    --muted-foreground: #8c97a7;
-    --accent: #232c38;
-    --accent-foreground: #e3e8ef;
+    --background: #171e1b;
+    --foreground: #e7e5dd;
+    --card: #1c2420;
+    --card-foreground: #e7e5dd;
+    --popover: #202925;
+    --popover-foreground: #e7e5dd;
+    --primary: #efe9d8;
+    --primary-foreground: #141a17;
+    --secondary: #252e2a;
+    --secondary-foreground: #e7e5dd;
+    --muted: #1e2622;
+    --muted-foreground: #939d96;
+    --accent: #252e2a;
+    --accent-foreground: #e7e5dd;
     --destructive: #e2574c;
-    --border: #263040;
-    --input: #2c3646;
-    --ring: #6e95f0;
+    --border: #29332e;
+    --input: #333e38;
+    --ring: #ffbe3d;
     --state-running: #3cc27a;
     --state-busy: #e3a43b;
     --state-failed: #f0645a;
-    --state-stopped: #6b7686;
+    --state-stopped: #6f7a73;
     --production: #b07bf0;
-    --sidebar: #161c24;
-    --sidebar-foreground: #e3e8ef;
-    --sidebar-primary: #6e95f0;
-    --sidebar-primary-foreground: #0e1420;
-    --sidebar-accent: #232c38;
-    --sidebar-accent-foreground: #e3e8ef;
-    --sidebar-border: #263040;
-    --sidebar-ring: #6e95f0;
+    --chart-1: #efe9d8;
+    --chart-2: #3cc27a;
+    --chart-3: #e3a43b;
+    --chart-4: #f0645a;
+    --chart-5: #b07bf0;
+    --sidebar: #131916;
+    --sidebar-foreground: #e7e5dd;
+    --sidebar-primary: #efe9d8;
+    --sidebar-primary-foreground: #141a17;
+    --sidebar-accent: rgb(239 233 216 / 0.09);
+    --sidebar-accent-foreground: #e7e5dd;
+    --sidebar-border: #29332e;
+    --sidebar-ring: #ffbe3d;
+    --selection: rgb(255 190 61 / 0.3);
+}
+
+/* With a native translucent frame (macOS vibrancy, Windows Mica) the page is
+   see-through: the sidebar shows the material, the content stays opaque. */
+html[data-frame="native"],
+html[data-frame="native"] body {
+    background: transparent;
+}
+html[data-frame="native"] .app-sidebar {
+    background: transparent;
+}
+/* The popover: the native material shows through it (macOS popover,
+   Windows acrylic); elsewhere it is an opaque panel. */
+html[data-window="popover"] .popover-shell {
+    background: var(--popover);
+}
+html[data-window="popover"][data-frame="native"] .popover-shell {
+    background: transparent;
 }
 
 @layer base {
@@ -135,9 +163,26 @@
   body {
     @apply bg-background text-foreground;
     }
+  ::selection {
+    background: var(--selection);
+    }
+  * {
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+    scrollbar-width: thin;
+    }
   html {
     @apply font-sans;
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
     }
+}
+/* Reduce motion: colours change and panes appear at once. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

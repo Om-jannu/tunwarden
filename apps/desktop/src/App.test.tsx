@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { setApi } from "./api";
 import { mockApi } from "./mock";
 import { App } from "./App";
+import { TrayPopover } from "./components/TrayPopover";
 import { useStore } from "./store";
 
 afterEach(cleanup);
@@ -40,6 +41,40 @@ describe("dashboard against the mock daemon", () => {
     render(<App />);
     expect(await screen.findByText("staging-db")).toBeTruthy();
     expect(screen.queryByText("Waiting for the daemon")).toBeNull();
+  });
+  it("the tray popover lists tunnels with switches and asks before starting production", async () => {
+    const calls: string[] = [];
+    const base = mockApi({ configExists: true });
+    setApi({ ...base, act: async (a, s) => (calls.push(`${a} ${s.names.join(",")}`), base.act(a, s)) });
+    useStore.setState({ phase: "loading", tunnels: null, confirm: null });
+    render(<TrayPopover />);
+    await screen.findByText("staging-db");
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Stop staging-db" })));
+    await waitFor(() => expect(calls).toEqual(["stop staging-db"]));
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Start prod-db" })));
+    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+    expect(calls).toEqual(["stop staging-db"]);
+    act(() => useStore.setState({ confirm: null }));
+  });
+  it("runs commands from the palette and moves through the list with j and k", async () => {
+    const calls: string[] = [];
+    const base = mockApi({ configExists: true });
+    setApi({ ...base, act: async (a, s) => (calls.push(`${a} ${s.names.join(",")}`), base.act(a, s)) });
+    useStore.setState({ phase: "loading", tunnels: null, confirm: null, open: null, view: "tunnels" });
+    render(<App />);
+    await screen.findByText("staging-db");
+    await act(async () => fireEvent.keyDown(window, { key: "k", metaKey: true }));
+    const input = await screen.findByRole("combobox", { name: "Search commands" });
+    fireEvent.change(input, { target: { value: "stop staging" } });
+    expect(screen.getAllByRole("option")[0]?.textContent).toContain("Stop staging-db");
+    await act(async () => fireEvent.keyDown(input, { key: "Enter" }));
+    await waitFor(() => expect(calls).toEqual(["stop staging-db"]));
+    await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
+    await act(async () => fireEvent.keyDown(window, { key: "j" }));
+    expect(useStore.getState().open).toBe("staging-db");
+    await act(async () => fireEvent.keyDown(window, { key: "j" }));
+    expect(useStore.getState().open).toBe("staging-redis");
+    act(() => useStore.setState({ open: null }));
   });
   it("shows the first-run screen without a config", async () => {
     setApi(mockApi({ configExists: false }));

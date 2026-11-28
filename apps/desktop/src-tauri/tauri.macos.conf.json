@@ -1,0 +1,52 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Tunwarden",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 760,
+        "minHeight": 480,
+        "resizable": true,
+        "visible": false,
+        "transparent": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 20
+        },
+        "windowEffects": {
+          "effects": [
+            "sidebar"
+          ],
+          "state": "followsWindowActiveState"
+        }
+      },
+      {
+        "label": "popover",
+        "url": "index.html#popover",
+        "title": "Tunwarden",
+        "width": 340,
+        "height": 460,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": true,
+        "shadow": true,
+        "transparent": true,
+        "windowEffects": {
+          "effects": [
+            "popover"
+          ],
+          "state": "active",
+          "radius": 12
+        }
+      }
+    ]
+  }
+}

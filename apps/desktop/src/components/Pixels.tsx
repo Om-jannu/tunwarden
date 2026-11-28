@@ -30,7 +30,13 @@ export function Pixels({
       aria-hidden={label ? undefined : true}
     >
       {art.paths.map(([fill, d]) => (
-        <path key={fill} fill={fill === "lamp" ? lamp : fill === "halo" ? halo : fill} d={d} />
+        <path
+          key={fill}
+          fill={fill === "lamp" ? lamp : fill === "halo" ? halo : fill}
+          d={d}
+          // The lamp eases to its new aspect, like a signal changing.
+          style={fill === "lamp" || fill === "halo" ? { transition: "fill 400ms cubic-bezier(0.16, 1, 0.3, 1)" } : undefined}
+        />
       ))}
     </svg>
   );

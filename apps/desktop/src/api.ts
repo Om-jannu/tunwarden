@@ -86,6 +86,11 @@ export interface Api {
   onDaemon(f: (e: DaemonEvent) => void): Promise<() => void>;
   onQuitRequested(f: () => void): Promise<() => void>;
   onConfirmStart(f: (c: ConfirmStart) => void): Promise<() => void>;
+  /** From the tray popover: opens the main window, optionally into a login. */
+  openMain(login?: string): Promise<void>;
+  hidePopover(): Promise<void>;
+  /** The main window is asked to run a login (from the popover). */
+  onOpenLogin(f: (name: string) => void): Promise<() => void>;
 }
 
 export function selector(part: Partial<Selector>): Selector {
@@ -133,6 +138,9 @@ async function tauriApi(): Promise<Api> {
     onDaemon: (f) => listen<DaemonEvent>("daemon", (e) => f(e.payload)),
     onQuitRequested: (f) => listen("quit-requested", () => f()),
     onConfirmStart: (f) => listen<ConfirmStart>("confirm-start", (e) => f(e.payload)),
+    openMain: (login) => invoke("open_main", { login: login ?? null }),
+    hidePopover: () => invoke("hide_popover"),
+    onOpenLogin: (f) => listen<string>("open-login", (e) => f(e.payload)),
   };
 }
 

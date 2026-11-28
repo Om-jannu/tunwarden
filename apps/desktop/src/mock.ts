@@ -70,11 +70,27 @@ export function mockApi(options: { configExists?: boolean } = {}): Api {
   const entries = sampleEntries();
   const loginListeners = new Set<(l: LoginLine) => void>();
   let autostart = false;
+  // A sample day of state changes, oldest first, for the 24-hour strips.
+  const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
   const activity: ActivityEvent[] = [
-    { time: new Date(Date.now() - 600_000).toISOString(), tunnel: "staging-db", from: "starting", to: "running" },
-    { time: new Date(Date.now() - 300_000).toISOString(), tunnel: "prod-api", from: "running", to: "failed", reason: "auth expired", message: "the google login has expired; run `tunwarden login google`" },
-    { time: new Date(Date.now() - 60_000).toISOString(), tunnel: "staging-redis", from: "running", to: "reconnecting", message: "the command exited with code 255" },
+    { time: ago(21), tunnel: "staging-db", from: "stopped", to: "starting" },
+    { time: ago(20.99), tunnel: "staging-db", from: "starting", to: "running" },
+    { time: ago(20), tunnel: "staging-redis", from: "stopped", to: "running" },
+    { time: ago(19), tunnel: "prod-api", from: "stopped", to: "running" },
+    { time: ago(18), tunnel: "bastion-socks", from: "stopped", to: "running" },
+    { time: ago(13.5), tunnel: "staging-db", from: "running", to: "reconnecting", message: "the command exited with code 1" },
+    { time: ago(13.3), tunnel: "staging-db", from: "reconnecting", to: "running" },
+    { time: ago(9), tunnel: "grafana", from: "stopped", to: "running" },
+    { time: ago(7), tunnel: "grafana", from: "running", to: "stopped" },
+    { time: ago(7), tunnel: "staging-redis", from: "running", to: "reconnecting", message: "the command exited with code 255" },
+    { time: ago(6.6), tunnel: "staging-redis", from: "reconnecting", to: "running" },
+    { time: ago(2.2), tunnel: "staging-db", from: "running", to: "stopped" },
+    { time: ago(2.2), tunnel: "staging-db", from: "stopped", to: "starting" },
+    { time: ago(2.18), tunnel: "staging-db", from: "starting", to: "running" },
+    { time: ago(0.09), tunnel: "prod-api", from: "running", to: "failed", reason: "auth expired", message: "the google login has expired; run `tunwarden login google`" },
+    { time: ago(0.02), tunnel: "staging-redis", from: "running", to: "reconnecting", message: "the command exited with code 255" },
   ];
+
   let configExists = options.configExists ?? !new URLSearchParams(globalThis.location?.search ?? "").has("fresh");
   const listeners = new Set<(e: DaemonEvent) => void>();
   const emit = (e: DaemonEvent) => listeners.forEach((f) => f(e));
@@ -185,5 +201,8 @@ export function mockApi(options: { configExists?: boolean } = {}): Api {
     },
     onQuitRequested: async () => () => {},
     onConfirmStart: async () => () => {},
+    openMain: async () => {},
+    hidePopover: async () => {},
+    onOpenLogin: async () => () => {},
   };
 }

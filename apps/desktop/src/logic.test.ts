@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Notifier, byProfile, detail, health, summary, uptime } from "./logic";
+import { DAY, timeline, timelineSummary } from "./logic";
 import { sampleTunnels } from "./mock";
 import { parseLine } from "./components/TunnelSheet";
 import type { TunnelView } from "./protocol";
@@ -94,5 +95,31 @@ describe("Notifier", () => {
     n.observe("stopped", { ...find("staging-db"), state: "starting" });
     n.flush();
     expect(sent).toEqual([]);
+  });
+});
+
+describe("timeline", () => {
+  const now = Date.parse("2026-11-28T12:00:00Z");
+  const at = (h: number) => new Date(now - h * 3600_000).toISOString();
+  const ev = (h: number, tunnel: string, from: string, to: string) => ({ time: at(h), tunnel, from, to }) as never;
+
+  it("is the current state for a day with no changes", () => {
+    expect(timeline([], "db", "running", now, true)).toEqual([{ state: "running", start: now - DAY, end: now }]);
+  });
+
+  it("follows each change and joins equal neighbours", () => {
+    const events = [ev(30, "db", "stopped", "running"), ev(5, "db", "running", "failed"), ev(4, "api", "stopped", "running"), ev(2, "db", "failed", "starting"), ev(1.9, "db", "starting", "running")];
+    const segs = timeline(events, "db", "running", now, true);
+    expect(segs.map((s) => s.state)).toEqual(["running", "failed", "starting", "running"]);
+    expect(segs[0]!.start).toBe(now - DAY);
+    expect(segs[1]!.end - segs[1]!.start).toBe(3 * 3600_000);
+    expect(timelineSummary(segs)).toBe("running 20h 54m, failed 3h, connecting 6m");
+  });
+
+  it("marks the time before a cut-off log as no record", () => {
+    const events = [ev(6, "api", "stopped", "running"), ev(3, "db", "running", "stopped")];
+    const segs = timeline(events, "db", "stopped", now, false);
+    expect(segs.map((s) => s.state)).toEqual(["unknown", "running", "stopped"]);
+    expect(segs[0]!.end).toBe(Date.parse(at(6)));
   });
 });

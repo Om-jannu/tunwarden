@@ -10,6 +10,7 @@ use serde::Serialize;
 use tauri::menu::MenuEvent;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Runtime, WindowEvent};
+use tauri::{PhysicalPosition, Rect};
 use tunwarden_core::client::Client;
 use tunwarden_core::proto::{ActionResult, Selector, method};
 use tunwarden_core::supervisor::State;
@@ -56,6 +57,8 @@ pub fn run() {
             bridge::auth_check,
             bridge::restart_daemon,
             bridge::quit,
+            open_main,
+            hide_popover,
             bridge::config_entries,
             bridge::save_entry,
             bridge::remove_entry,
@@ -71,22 +74,23 @@ pub fn run() {
                 .icon(tray::icon(tray::Health::Idle, false))
                 .tooltip("Tunwarden")
                 .menu(&tray::menu(app.handle(), None)?)
-                .show_menu_on_left_click(true)
+                // A left click opens the popover and a right click the menu.
+                // Linux trays report no clicks, so there the menu opens on any.
+                .show_menu_on_left_click(cfg!(target_os = "linux"))
                 .on_menu_event(on_menu)
-                .on_tray_icon_event(|icon, event| {
-                    // Windows and Linux: a double click opens the window.
-                    if let TrayIconEvent::DoubleClick {
+                .on_tray_icon_event(|icon, event| match event {
+                    TrayIconEvent::Click {
                         button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        rect,
                         ..
-                    }
-                    | TrayIconEvent::Click {
+                    } => toggle_popover(icon.app_handle(), rect),
+                    TrayIconEvent::Click {
                         button: MouseButton::Middle,
                         button_state: MouseButtonState::Up,
                         ..
-                    } = event
-                    {
-                        show(icon.app_handle());
-                    }
+                    } => show(icon.app_handle()),
+                    _ => {}
                 })
                 .build(app)?;
             if let Some(theme) = app.get_webview_window("main").and_then(|w| w.theme().ok()) {
@@ -99,6 +103,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
+            // The popover closes as soon as it loses focus, like a menu.
+            WindowEvent::Focused(false) if window.label() == POPOVER => {
+                if window.is_visible().unwrap_or(false) {
+                    *BLURRED_AT.lock().unwrap_or_else(|e| e.into_inner()) =
+                        Some(std::time::Instant::now());
+                }
+                let _ = window.hide();
+            }
             // Closing the window hides it; tunnels and the tray stay (D6).
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
@@ -126,6 +138,77 @@ fn set_theme<R: Runtime>(app: &AppHandle<R>, theme: tauri::Theme) {
     bridge::update_tray(app, last.as_ref());
 }
 
+const POPOVER: &str = "popover";
+
+/// When the popover last hid because it lost focus. Clicking the tray icon to
+/// close it first takes its focus, then delivers the click: without this the
+/// click would open it again at once.
+static BLURRED_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// Shows the popover next to the tray icon, or hides it when it is open.
+/// It opens below an icon in a top bar (macOS) and above one in a bottom
+/// taskbar (Windows), kept inside the screen.
+fn toggle_popover<R: Runtime>(app: &AppHandle<R>, icon: Rect) {
+    let Some(w) = app.get_webview_window(POPOVER) else {
+        return;
+    };
+    if w.is_visible().unwrap_or(false) {
+        let _ = w.hide();
+        return;
+    }
+    let just_closed = BLURRED_AT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+        .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(300));
+    if just_closed {
+        return;
+    }
+    let scale = w.scale_factor().unwrap_or(1.0);
+    let at = icon.position.to_physical::<f64>(scale);
+    let size = icon.size.to_physical::<f64>(scale);
+    let pop = w.outer_size().unwrap_or_default();
+    let (pw, ph) = (f64::from(pop.width), f64::from(pop.height));
+    let gap = 6.0 * scale;
+    let mut x = at.x + size.width / 2.0 - pw / 2.0;
+    let mut y = at.y + size.height + gap;
+    if let Ok(Some(m)) = w.monitor_from_point(at.x, at.y) {
+        let area = m.work_area();
+        let (left, top) = (f64::from(area.position.x), f64::from(area.position.y));
+        let (right, bottom) = (
+            left + f64::from(area.size.width),
+            top + f64::from(area.size.height),
+        );
+        if at.y > (top + bottom) / 2.0 {
+            y = at.y - ph - gap;
+        }
+        x = x.clamp(left + gap, (right - pw - gap).max(left + gap));
+        y = y.clamp(top + gap, (bottom - ph - gap).max(top + gap));
+    }
+    let _ = w.set_position(PhysicalPosition::new(x, y));
+    let _ = w.show();
+    let _ = w.set_focus();
+}
+
+/// From the popover: opens the main window, optionally straight into a login.
+#[tauri::command]
+fn open_main<R: Runtime>(app: AppHandle<R>, login: Option<String>) {
+    if let Some(p) = app.get_webview_window(POPOVER) {
+        let _ = p.hide();
+    }
+    show(&app);
+    if let Some(name) = login {
+        let _ = app.emit_to("main", "open-login", name);
+    }
+}
+
+#[tauri::command]
+fn hide_popover<R: Runtime>(app: AppHandle<R>) {
+    if let Some(p) = app.get_webview_window(POPOVER) {
+        let _ = p.hide();
+    }
+}
+
 fn show<R: Runtime>(app: &AppHandle<R>) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -140,7 +223,7 @@ fn on_menu<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         "open" => show(app),
         "quit" => {
             show(app);
-            let _ = app.emit("quit-requested", ());
+            let _ = app.emit_to("main", "quit-requested", ());
         }
         _ => {
             let app = app.clone();
@@ -210,7 +293,8 @@ async fn menu_action<R: Runtime>(app: &AppHandle<R>, id: &str) {
             .collect();
         if !production.is_empty() {
             show(app);
-            let _ = app.emit(
+            let _ = app.emit_to(
+                "main",
                 "confirm-start",
                 ConfirmStart {
                     selector,
