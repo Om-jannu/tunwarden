@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "fake-tunnel"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "nix",
  "serde_json",
@@ -4976,7 +4976,7 @@ dependencies = [
 
 [[package]]
 name = "tunwarden-cli"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "anstream",
  "anstyle",
@@ -4998,7 +4998,7 @@ dependencies = [
 
 [[package]]
 name = "tunwarden-core"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "humantime",
  "listeners",
@@ -5021,7 +5021,7 @@ dependencies = [
 
 [[package]]
 name = "tunwarden-desktop"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "objc2",
  "objc2-app-kit",
