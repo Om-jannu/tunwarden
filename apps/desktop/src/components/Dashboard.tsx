@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { smallPortal, wardenLantern } from "@/art/pixels";
+import { LAMP, Pixels } from "@/components/Pixels";
 import { CopyIcon, FileCodeIcon, LogInIcon, PlayIcon, PlusIcon, RotateCwIcon, SearchIcon, SquareIcon, TerminalIcon, UploadIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/toast";
 import { api, selector } from "@/api";
-import { byProfile, detail, health, isActive, summary, uptime, type Health } from "@/logic";
+import { byProfile, detail, health, isActive, summary, uptime } from "@/logic";
 import type { State, TunnelView } from "@/protocol";
 import { one, useStore, type View } from "@/store";
 
@@ -31,13 +33,6 @@ const RAIL: Record<State, string> = {
   unhealthy: "border-l-busy",
   failed: "border-l-failed",
   stopped: "border-l-transparent",
-};
-
-const DOT: Record<Health, string> = {
-  idle: "bg-stopped",
-  good: "bg-running",
-  busy: "bg-busy",
-  bad: "bg-failed",
 };
 
 export function StateLabel({ state }: { state: State }) {
@@ -90,7 +85,7 @@ export function Header() {
   return (
     <header className="flex items-center gap-4 border-b bg-card px-4 py-2">
       <div className="flex min-w-0 items-center gap-2">
-        <span className={cn("size-2.5 shrink-0 rounded-full", DOT[h])} aria-hidden />
+        <Pixels art={smallPortal} scale={1} lamp={LAMP[h]} className="shrink-0" />
         <h1 className="text-[15px] font-semibold">Tunwarden</h1>
         <span className="truncate text-muted-foreground">{tunnels ? summary(tunnels) : "Connecting to the daemon"}</span>
       </div>
@@ -295,6 +290,7 @@ export function TunnelsView() {
         ) : tunnels.length === 0 ? (
           <Empty className="h-full">
             <EmptyHeader>
+              <Pixels art={wardenLantern} scale={3} lamp={LAMP.idle} className="mb-2" />
               <EmptyTitle>No tunnels yet</EmptyTitle>
               <EmptyDescription>Import them from your shell aliases, or add one.</EmptyDescription>
             </EmptyHeader>

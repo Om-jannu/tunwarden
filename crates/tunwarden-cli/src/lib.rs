@@ -1,6 +1,7 @@
 //! The `tunwarden` command line (PRD 7.7). Kept in a library so the system
 //! tests can run exactly this code next to their fake tunnels.
 
+mod art;
 mod table;
 mod ui;
 
@@ -67,7 +68,7 @@ struct Cli {
     #[arg(long, global = true, value_name = "PATH")]
     config: Option<PathBuf>,
     #[command(subcommand)]
-    command: Cmd,
+    command: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
@@ -306,6 +307,9 @@ where
     // `COMPLETE=<shell> tunwarden ...` is the shell asking for completions.
     clap_complete::CompleteEnv::with_factory(Cli::command).complete();
     let cli = Cli::parse_from(args);
+    let Some(command) = cli.command else {
+        return welcome();
+    };
     let ctx = match locations(cli.config) {
         Ok(ctx) => ctx,
         Err(e) => return report(e),
@@ -317,10 +321,42 @@ where
         Ok(rt) => rt,
         Err(e) => return report(format!("cannot start: {e}").into()),
     };
-    match runtime.block_on(dispatch(&ctx, cli.command)) {
+    match runtime.block_on(dispatch(&ctx, command)) {
         Ok(code) => code,
         Err(e) => report(e),
     }
+}
+
+/// A bare `tunwarden`: the waving warden and where to start.
+fn welcome() -> ExitCode {
+    let b = |s: &str| ui::paint(ui::BOLD, s);
+    art::say(
+        &art::WARDEN_WAVE,
+        art::UNLIT,
+        &[
+            format!("{} keeps your tunnels running.", b("Tunwarden")),
+            String::new(),
+            format!(
+                "  {}           write an example config",
+                b("tunwarden init")
+            ),
+            format!(
+                "  {}  turn your tunnel aliases into entries",
+                b("tunwarden import ~/.zshrc")
+            ),
+            format!(
+                "  {}          start, then see what runs",
+                b("tunwarden start")
+            ),
+            format!(
+                "  {}         check tools, logins and ports",
+                b("tunwarden doctor")
+            ),
+            String::new(),
+            format!("Every command: {}", b("tunwarden --help")),
+        ],
+    );
+    ExitCode::SUCCESS
 }
 
 fn report(e: Failure) -> ExitCode {
@@ -489,9 +525,14 @@ fn init(ctx: &Ctx) -> Outcome {
     }
     std::fs::write(&ctx.config, EXAMPLE_CONFIG)
         .map_err(|e| format!("cannot write {}: {e}", ctx.config.display()))?;
-    println!("created {}", ctx.config.display());
-    println!(
-        "Replace the example logins, profiles and tunnels with your own, then run `tunwarden list`."
+    art::say(
+        &art::WARDEN_WAVE,
+        art::UNLIT,
+        &[
+            format!("created {}", ctx.config.display()),
+            "Replace the example logins, profiles and tunnels with your own, then run `tunwarden list`."
+                .to_owned(),
+        ],
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -1240,11 +1281,23 @@ async fn doctor(ctx: &Ctx) -> Outcome {
     let exe = std::env::current_exe().ok();
     let report =
         tunwarden_core::doctor::run(&ctx.config, &ctx.state_dir, "cli", exe.as_deref()).await;
-    Ok(if print_report(&report) {
-        ExitCode::FAILURE
+    let problems = print_report(&report);
+    println!();
+    if problems {
+        art::say(
+            &art::WARDEN_LANTERN,
+            art::FAILED,
+            &["Something needs fixing: see the problems above.".to_owned()],
+        );
+        Ok(ExitCode::FAILURE)
     } else {
-        ExitCode::SUCCESS
-    })
+        art::say(
+            &art::WARDEN_LANTERN,
+            art::RUNNING,
+            &["All clear.".to_owned()],
+        );
+        Ok(ExitCode::SUCCESS)
+    }
 }
 
 // --- import (FR-6, FR-43) --------------------------------------------------------
@@ -1638,7 +1691,14 @@ async fn login(ctx: &Ctx, name: &str) -> Outcome {
             if result.restarted.is_empty() {
                 println!("logged in; no tunnels were waiting for this login");
             } else {
-                println!("logged in; restarting {}", result.restarted.join(", "));
+                art::say(
+                    &art::WARDEN_LANTERN,
+                    art::RUNNING,
+                    &[format!(
+                        "logged in; restarting {}",
+                        result.restarted.join(", ")
+                    )],
+                );
             }
         }
         Err(ClientError::NotRunning) => match gauth::check(login, &config.tools).await {
@@ -1704,7 +1764,11 @@ async fn daemon_command(ctx: &Ctx, cmd: DaemonCommand) -> Outcome {
                 } else {
                     ""
                 };
-                println!("daemon stopped{extra}");
+                art::say(
+                    &art::WARDEN_REST,
+                    art::UNLIT,
+                    &[format!("daemon stopped{extra}")],
+                );
             } else {
                 println!("daemon is not running");
             }

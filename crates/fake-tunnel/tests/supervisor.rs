@@ -65,6 +65,15 @@ fn free_port() -> u16 {
         .port()
 }
 
+/// `N` different free ports. All listeners stay open until every port is
+/// picked: Windows hands a just-closed port out again at once.
+fn free_ports<const N: usize>() -> [u16; N] {
+    let held: Vec<TcpListener> = (0..N)
+        .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
+        .collect();
+    std::array::from_fn(|i| held[i].local_addr().unwrap().port())
+}
+
 fn connectable(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
@@ -414,7 +423,7 @@ async fn two_profiles_get_their_own_environment() {
 async fn config_changes_wait_for_a_restart() {
     // FR-5 "restart to apply"
     let _turn = PORTS.lock().await;
-    let (p1, p2) = (free_port(), free_port());
+    let [p1, p2] = free_ports();
     let c1 = load(&tunnel(
         "db",
         &format!("--listen 127.0.0.1:{p1}"),

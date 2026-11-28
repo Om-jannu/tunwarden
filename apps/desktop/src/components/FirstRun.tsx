@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { wardenWave } from "@/art/pixels";
+import { Pixels } from "@/components/Pixels";
 import { FileTextIcon, FolderOpenIcon, UploadIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -67,6 +69,7 @@ export function FirstRun() {
     <div className="flex h-dvh justify-center overflow-auto bg-background px-6 py-10">
       <div className="flex w-full max-w-[640px] flex-col gap-6">
         <header className="flex flex-col gap-1">
+          {fresh && <Pixels art={wardenWave} scale={4} className="mb-3" label="The Tunwarden warden, waving" />}
           <h1 className="text-[20px] font-semibold">{fresh ? "Set up your tunnels" : "Import tunnels"}</h1>
           <p className="text-muted-foreground">
             {fresh ? "Tunwarden keeps your tunnels running and tells you when a login expires. " : ""}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { portal, warden } from "@/art/pixels";
+import { portal, wardenLantern, wardenStand } from "@/art/pixels";
 import { Pixels } from "./Pixels";
 
 // The landing page's demo: three tunnels on a signal-box diagram, worked by
@@ -151,7 +151,13 @@ export function SignalBox({ copy, install }: { copy: React.ReactNode; install: R
           <p className="speech" aria-live="polite">
             {say}
           </p>
-          <Pixels art={warden} scale={4} className="warden" label="The Tunwarden warden" />
+          {box.login === "expired" ? (
+            <Pixels art={wardenLantern} lamp="#f0645a" scale={4} className="warden" label="The warden holding up a red lantern" />
+          ) : box.busy !== null || redis.state !== "running" ? (
+            <Pixels art={wardenLantern} lamp="#e3a43b" scale={4} className="warden" label="The warden holding up an amber lantern" />
+          ) : (
+            <Pixels art={wardenStand} scale={4} className="warden" label="The Tunwarden warden" />
+          )}
         </div>
 
         <ul className="tracks">
@@ -168,7 +174,7 @@ export function SignalBox({ copy, install }: { copy: React.ReactNode; install: R
                 <span className="plate plate-state">{words[t.state]}</span>
               </div>
               <span className="rail" aria-hidden="true" />
-              <Portal state={t.state} />
+              <Portal />
             </li>
           ))}
         </ul>
@@ -207,39 +213,10 @@ export function SignalBox({ copy, install }: { copy: React.ReactNode; install: R
   );
 }
 
-const halo: Record<State, string> = {
-  running: "#1f5b3f",
-  reconnecting: "#6b4f1f",
-  starting: "#6b4f1f",
-  failed: "#6e2f2b",
-};
-
-// The lamp inside the portal: the same 7×7 disc the app icon and tray use.
-function Portal({ state }: { state: State }) {
-  const cells: { x: number; y: number; inner: boolean }[] = [];
-  for (let dy = -3; dy <= 3; dy++)
-    for (let dx = -3; dx <= 3; dx++) {
-      const d = Math.hypot(dx, dy);
-      if (d <= 3.1) cells.push({ x: 16 + dx, y: 18 + dy, inner: d <= 1.6 });
-    }
-  return (
-    <Pixels art={portal} scale={4} className="portal">
-      <g className="lamp">
-        {cells.map((c) => (
-          <rect
-            key={`${c.x}-${c.y}`}
-            x={c.x}
-            y={c.y}
-            width={1}
-            height={1}
-            className={c.inner ? "lamp-core" : "lamp-halo"}
-            style={c.inner ? undefined : { fill: halo[state] }}
-          />
-        ))}
-        <rect x={15} y={17} width={1} height={1} fill="#ffffff" />
-      </g>
-    </Pixels>
-  );
+// The portal's lamp is the same 7×7 disc the app icon and tray use; CSS gives
+// it the track's state colour.
+function Portal() {
+  return <Pixels art={portal} scale={4} className="portal" />;
 }
 
 function Lever({

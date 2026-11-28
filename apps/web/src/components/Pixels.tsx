@@ -7,10 +7,14 @@ export function Pixels({
   scale,
   className,
   label,
+  lamp,
+  halo,
   children,
 }: {
   art: PixelArt;
   scale: number;
+  lamp?: string;
+  halo?: string;
   className?: string;
   label?: string;
   children?: React.ReactNode;
@@ -26,9 +30,16 @@ export function Pixels({
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      {art.paths.map(([fill, d]) => (
-        <path key={fill} fill={fill} d={d} />
-      ))}
+      {art.paths.map(([fill, d]) =>
+        // "lamp" and "halo" are coloured by CSS (.lamp-core, .lamp-halo) or `lamp`.
+        fill === "lamp" ? (
+          <path key={fill} className="lamp-core" fill={lamp} d={d} />
+        ) : fill === "halo" ? (
+          <path key={fill} className="lamp-halo" fill={halo} d={d} />
+        ) : (
+          <path key={fill} fill={fill} d={d} />
+        ),
+      )}
       {children}
     </svg>
   );

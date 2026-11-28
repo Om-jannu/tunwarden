@@ -371,6 +371,19 @@ pre {
   fill: var(--r);
 }
 
+.track[data-state="running"] .lamp-halo {
+  fill: #1f5b3f;
+}
+
+.track[data-state="reconnecting"] .lamp-halo,
+.track[data-state="starting"] .lamp-halo {
+  fill: #6b4f1f;
+}
+
+.track[data-state="failed"] .lamp-halo {
+  fill: #6e2f2b;
+}
+
 .register {
   padding: 0.75rem 1rem 0.85rem;
   border-radius: 3px;

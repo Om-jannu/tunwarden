@@ -17,7 +17,7 @@ pnpm --filter tunwarden-web build    # static files in apps/web/out
 
 ## Pixel art
 
-The portal, lamp, tray glyph, warden and favicon come from `docs/brand/concepts/make.py`. After changing a drawing there, run `pnpm --filter tunwarden-web art` to regenerate `src/art/pixels.ts`. CI fails if the two disagree.
+The portal, lamp, tray glyph, warden poses, favicon and link preview come from `docs/brand/concepts/make.py`. After changing a drawing there, run `python3 docs/brand/export.py` (or `pnpm --filter tunwarden-web art`); it regenerates the art for the site, the desktop app, the CLI and the installers. CI fails if the text outputs disagree.
 
 ## Demo content
 

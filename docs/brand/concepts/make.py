@@ -119,6 +119,84 @@ FRIENDLY = [
     ".KDDK..KDDK.",
 ]
 
+# The friendly warden's poses: the standing sprite with pixels drawn over it,
+# so every pose keeps the same head and body. `L` is the lantern glass, lit in
+# a state colour or unlit; `G` is the white glove.
+
+def _pose(width, marks, rows=None):
+    grid = [list(r.ljust(width, ".")) for r in (rows or FRIENDLY)]
+    for x, y, ch in marks:
+        grid[y][x] = ch
+    return ["".join(r) for r in grid]
+
+
+def _lantern(x, y):
+    """A lantern whose handle top is at (x+2, y): ring, cap, glass, base."""
+    return [
+        (x + 1, y, "K"), (x + 2, y, "K"), (x + 3, y, "K"),
+        (x + 1, y + 1, "K"), (x + 3, y + 1, "K"),
+        (x, y + 2, "K"), (x + 1, y + 2, "M"), (x + 2, y + 2, "M"), (x + 3, y + 2, "M"), (x + 4, y + 2, "K"),
+        (x, y + 3, "K"), (x + 1, y + 3, "L"), (x + 2, y + 3, "L"), (x + 3, y + 3, "L"), (x + 4, y + 3, "K"),
+        (x, y + 4, "K"), (x + 1, y + 4, "L"), (x + 2, y + 4, "L"), (x + 3, y + 4, "L"), (x + 4, y + 4, "K"),
+        (x + 1, y + 5, "K"), (x + 2, y + 5, "M"), (x + 3, y + 5, "K"),
+    ]
+
+
+# Waving: the right arm up, a white glove, two motion ticks.
+WAVE = _pose(17, [
+    # upper arm out of the shoulder, forearm straight up
+    (11, 9, "b"), (12, 9, "K"), (12, 10, "K"), (11, 10, "K"),
+    (12, 8, "b"), (13, 8, "K"), (11, 8, "K"),
+    (12, 7, "b"), (12, 6, "b"), (12, 5, "b"), (11, 7, "K"), (13, 7, "K"), (11, 6, "K"), (13, 6, "K"), (11, 5, "K"), (13, 5, "K"),
+    # glove
+    (11, 2, "K"), (12, 2, "K"), (13, 2, "K"), (14, 2, "K"),
+    (11, 3, "K"), (12, 3, "G"), (13, 3, "G"), (14, 3, "K"),
+    (11, 4, "K"), (12, 4, "G"), (13, 4, "G"), (14, 4, "K"),
+    (16, 2, "M"), (16, 4, "M"),
+])
+WAVE[4] = WAVE[4][:11] + "K" + WAVE[4][12:]
+
+# Holding a lantern out at the side.
+LANTERN = _pose(18, [
+    (11, 10, "b"), (12, 10, "b"), (13, 10, "G"),
+    (12, 9, "K"), (13, 9, "K"), (12, 11, "K"), (11, 11, "K"),
+] + _lantern(12, 9)[3:] + [(13, 8, "K"), (14, 8, "K"), (15, 8, "K"), (15, 9, "K")])
+
+# Resting: eyes half shut, sitting, the lantern down beside him and unlit.
+REST = _pose(18, [
+    (3, 6, "V"), (4, 6, "V"), (7, 6, "V"), (8, 6, "V"),
+    (3, 7, "M"), (4, 7, "M"), (7, 7, "M"), (8, 7, "M"),
+] + [(x, 14, "D") for x in range(1, 11)] + [(0, 14, "K"), (11, 14, "K")] + _lantern(13, 9))
+
+POSES = {"stand": FRIENDLY, "wave": WAVE, "lantern": LANTERN, "rest": REST}
+WARDEN_PALETTE = dict(K="#0b0f15", h="#ff8f9c", H="#ef5b6d", V="#0b0f15", E="#f4f7ff",
+                      B="#3d7bea", b="#2a5bb8", Y="#ffe08a", D="#18202c", M="#8a93a3",
+                      G="#f4f7ff")
+UNLIT = "#3a4150"
+
+
+def warden(pose="stand", lamp=None):
+    """The friendly warden in `pose`, on a grid exactly its size. `lamp` is the
+    lantern glass colour; `None` leaves it unlit."""
+    rows = POSES[pose]
+    g = Grid(max(len(rows), len(rows[0])))
+    g.sprite(0, 0, rows, dict(WARDEN_PALETTE, L=lamp or UNLIT))
+    g.w, g.h = len(rows[0]), len(rows)
+    return g
+
+
+def small_portal(lamp):
+    """A 16 px stone portal with its lamp, for small places such as a terminal."""
+    g = Grid(16)
+    tunnel(g, 8, 1, 7, 4, 15, ("#56627a", "#434e63", "#323b4c"), ("#05070a", "#0b0f15"), depth=False)
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            g.set(8 + dx, 10 + dy, lamp)
+    g.set(7, 9, "#ffffff")
+    g.w = g.h = 16
+    return g
+
+
 SERIOUS = [
     ".....KKKK......",
     "....KCCCCK.....",

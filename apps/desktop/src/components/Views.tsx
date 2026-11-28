@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { wardenLantern, wardenRest } from "@/art/pixels";
+import { LAMP, Pixels } from "@/components/Pixels";
 import { LogInIcon, PencilIcon, PlusIcon, RefreshCwIcon, TerminalIcon, Trash2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -188,6 +190,7 @@ export function LoginsView() {
         {logins.length === 0 ? (
           <Empty className="border">
             <EmptyHeader>
+              <Pixels art={wardenLantern} scale={3} lamp={LAMP.idle} className="mb-2" />
               <EmptyTitle>No logins</EmptyTitle>
               <EmptyDescription>Add one for a tool whose sign-in expires, such as gcloud or AWS SSO, so expired tunnels stop with a clear reason and restart after you log in.</EmptyDescription>
             </EmptyHeader>
@@ -313,6 +316,7 @@ export function ActivityView() {
       {events.length === 0 ? (
         <Empty>
           <EmptyHeader>
+            <Pixels art={wardenRest} scale={3} className="mb-2" />
             <EmptyTitle>Nothing has happened yet</EmptyTitle>
             <EmptyDescription>Starts, stops, failures and reconnects of every tunnel appear here.</EmptyDescription>
           </EmptyHeader>

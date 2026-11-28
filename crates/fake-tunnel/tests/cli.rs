@@ -22,15 +22,16 @@ struct Env {
 impl Env {
     fn new() -> Env {
         let dir = tempfile::tempdir().unwrap();
-        let ports: Vec<u16> = (0..2)
-            .map(|_| {
-                TcpListener::bind("127.0.0.1:0")
-                    .unwrap()
-                    .local_addr()
-                    .unwrap()
-                    .port()
-            })
+        // Both listeners stay open until both ports are picked: Windows hands
+        // a just-closed port out again at once.
+        let held: Vec<TcpListener> = (0..2)
+            .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
             .collect();
+        let ports: Vec<u16> = held
+            .iter()
+            .map(|l| l.local_addr().unwrap().port())
+            .collect();
+        drop(held);
         let config = format!(
             "version = 1\n\
              [[profiles]]\nname = \"prod\"\nproduction = true\n\

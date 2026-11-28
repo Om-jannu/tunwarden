@@ -108,12 +108,13 @@ fn names(status: &Value) -> Vec<String> {
         .collect()
 }
 
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+/// `N` different free ports. All listeners stay open until every port is
+/// picked: Windows hands a just-closed port out again at once.
+fn free_ports<const N: usize>() -> [u16; N] {
+    let held: Vec<TcpListener> = (0..N)
+        .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
+        .collect();
+    std::array::from_fn(|i| held[i].local_addr().unwrap().port())
 }
 
 fn listening(port: u16) -> bool {
@@ -134,7 +135,7 @@ const HEADER: &str = "# My tunnels, edited by hand and by tunwarden.\nversion = 
 fn add_edit_remove_keep_comments() {
     let _turn = PORTS.lock().unwrap_or_else(|e| e.into_inner());
     let env = Env::new(HEADER);
-    let (p1, p2) = (free_port(), free_port());
+    let [p1, p2] = free_ports();
 
     let out = env.ok(&[
         "add",
@@ -274,7 +275,7 @@ fn invalid_edits_write_nothing() {
 fn hand_edits_are_picked_up_while_the_daemon_runs() {
     // AC-12
     let _turn = PORTS.lock().unwrap_or_else(|e| e.into_inner());
-    let (p1, p2) = (free_port(), free_port());
+    let [p1, p2] = free_ports();
     let env = Env::new(&format!(
         "{HEADER}\n# the main database\n[[tunnels]]\nname = \"db\"\ncommand = '''{}'''\nforwards = [{{ local_port = {p1} }}]\n",
         fake(p1)

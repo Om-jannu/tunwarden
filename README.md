@@ -1,5 +1,7 @@
 # Tunwarden
 
+![Tunwarden: keeps your tunnels running](docs/brand/banner.png)
+
 Tunwarden keeps your tunnels running. It starts SSH forwards and any command that opens a local port (`gcloud compute start-iap-tunnel`, `kubectl port-forward`, `aws ssm start-session`, ...), checks that each one is really listening, reconnects dropped ones, keeps a log per tunnel, and tells you when a login has expired. One `tunwarden login` renews it and brings the affected tunnels back.
 
 It runs on macOS, Linux and Windows. A small background daemon owns the tunnels, so they survive closing the terminal. There is no account, telemetry or network access of its own.
@@ -79,7 +81,7 @@ logged in; restarting prod-api, staging-db
 
 `init`, `import`, `list`, `status`, `start`, `stop`, `restart`, `logs`, `show-command`, `add`, `edit`, `remove`, `auth`, `login`, `trust`, `doctor`, `daemon`, `autostart`, `config-path`, `completions`. Run `tunwarden <command> --help` for details and examples. `start` and `stop` take names, `--group`, `--profile` or `--all`.
 
-On a terminal, a command missing its tunnel or login name shows a list to pick from (`tunwarden start`, `tunwarden logs`, `tunwarden login`), `tunwarden add` asks for each field, and `start` shows a live line per tunnel. In scripts and pipes nothing asks or animates, colours are off, and a missing name is an error listing the choices. `NO_COLOR=1` turns colours off everywhere.
+On a terminal, a command missing its tunnel or login name shows a list to pick from (`tunwarden start`, `tunwarden logs`, `tunwarden login`), `tunwarden add` asks for each field, and `start` shows a live line per tunnel. In scripts and pipes nothing asks or animates, colours are off, and a missing name is an error listing the choices. `NO_COLOR=1` turns colours off everywhere. The pixel warden appears at a few moments (a bare `tunwarden`, `init`, `doctor`, a login that brings tunnels back, `daemon stop`), only on a colour terminal; `TUNWARDEN_NO_ART=1` turns it off.
 
 Shell completion knows your tunnel, group, profile and login names:
 

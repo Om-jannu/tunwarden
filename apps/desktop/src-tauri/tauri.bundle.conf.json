@@ -4,17 +4,61 @@
     "beforeBuildCommand": "pnpm build && node scripts/sidecar.mjs"
   },
   "bundle": {
-    "externalBin": ["binaries/tunwarden"],
+    "externalBin": [
+      "binaries/tunwarden"
+    ],
     "category": "DeveloperTool",
     "shortDescription": "Keeps your SSH and command-based tunnels running",
     "longDescription": "Tunwarden starts SSH forwards and any command that opens a local port, checks that each one listens, reconnects dropped tunnels, keeps logs, and handles expired logins.",
     "copyright": "Om Jannu, MIT OR Apache-2.0",
     "homepage": "https://github.com/Om-jannu/tunwarden",
     "linux": {
-      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1"], "recommends": ["openssh-client"] },
-      "rpm": { "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3"] }
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1"
+        ],
+        "recommends": [
+          "openssh-client"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "libayatana-appindicator-gtk3"
+        ]
+      }
     },
-    "macOS": { "minimumSystemVersion": "11.0" },
-    "windows": { "webviewInstallMode": { "type": "downloadBootstrapper" } }
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "dmg": {
+        "background": "installer/dmg-background.png",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        }
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "headerImage": "installer/nsis-header.bmp",
+        "sidebarImage": "installer/nsis-sidebar.bmp"
+      },
+      "wix": {
+        "bannerPath": "installer/wix-banner.bmp",
+        "dialogImagePath": "installer/wix-dialog.bmp"
+      }
+    }
   }
 }

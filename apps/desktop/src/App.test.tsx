@@ -47,6 +47,7 @@ describe("dashboard against the mock daemon", () => {
     render(<App />);
     expect(await screen.findByText("Set up your tunnels")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start from the example config" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "The Tunwarden warden, waving" })).toBeTruthy();
   });
 
   it("shows the daemon's validation error on the field it names", async () => {
