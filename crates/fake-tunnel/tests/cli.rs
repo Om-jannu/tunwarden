@@ -34,8 +34,8 @@ impl Env {
         let config = format!(
             "version = 1\n\
              [[profiles]]\nname = \"prod\"\nproduction = true\n\
-             [[tunnels]]\nname = \"db\"\ngroups = [\"daily\"]\ncommand = \"'{FAKE}' --listen 127.0.0.1:{} --print-stdout ready\"\nforwards = [{{ local_port = {} }}]\n\
-             [[tunnels]]\nname = \"api\"\nprofile = \"prod\"\ncommand = \"'{FAKE}' --listen 127.0.0.1:{}\"\nforwards = [{{ local_port = {} }}]\n",
+             [[tunnels]]\nname = \"db\"\ngroups = [\"daily\"]\ncommand = ''''{FAKE}' --listen 127.0.0.1:{} --print-stdout ready'''\nforwards = [{{ local_port = {} }}]\n\
+             [[tunnels]]\nname = \"api\"\nprofile = \"prod\"\ncommand = ''''{FAKE}' --listen 127.0.0.1:{}'''\nforwards = [{{ local_port = {} }}]\n",
             ports[0], ports[0], ports[1], ports[1]
         );
         std::fs::write(dir.path().join("config.toml"), config).unwrap();
@@ -166,8 +166,10 @@ fn list_and_show_command_need_no_daemon() {
     let cmd = env.run(&["show-command", "db"]).ok().out();
     assert_eq!(
         cmd.trim(),
+        // A Windows path has backslashes, so the CLI prints it quoted.
         format!(
-            "{FAKE} --listen 127.0.0.1:{} --print-stdout ready",
+            "{} --listen 127.0.0.1:{} --print-stdout ready",
+            tunwarden_core::types::quote(FAKE),
             env.ports[0]
         )
     );

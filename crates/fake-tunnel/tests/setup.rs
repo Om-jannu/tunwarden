@@ -158,8 +158,8 @@ fn doctor_reports_problems_and_exits_non_zero() {
         .port();
     let env = Env::new(&format!(
         "version = 1\n[tools]\nssh = \"/nonexistent/ssh\"\n\
-         [[tunnels]]\nname = \"ok\"\ncommand = \"'{FAKE}'\"\nforwards = [{{ local_port = {free} }}]\n\
-         [[tunnels]]\nname = \"taken\"\ncommand = \"'{FAKE}'\"\nforwards = [{{ local_port = {busy} }}]\n\
+         [[tunnels]]\nname = \"ok\"\ncommand = ''''{FAKE}''''\nforwards = [{{ local_port = {free} }}]\n\
+         [[tunnels]]\nname = \"taken\"\ncommand = ''''{FAKE}''''\nforwards = [{{ local_port = {busy} }}]\n\
          [[tunnels]]\nname = \"k\"\ntype = \"ssh-local\"\nhost = \"bastion\"\nforwards = [{{ local_port = 1, remote_port = 2 }}]\n"
     ));
     let out = env.run(&["doctor"], "");

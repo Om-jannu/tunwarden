@@ -76,7 +76,7 @@ impl Setup {
                 .unwrap()
                 .port();
             tunnels.push_str(&format!(
-                "[[tunnels]]\nname = \"{name}\"\ncommand = \"'{FAKE}' --listen 127.0.0.1:{port}\"\nforwards = [{{ local_port = {port} }}]\n"
+                "[[tunnels]]\nname = \"{name}\"\ncommand = ''''{FAKE}' --listen 127.0.0.1:{port}'''\nforwards = [{{ local_port = {port} }}]\n"
             ));
             if let Some(p) = profile {
                 tunnels.push_str(&format!("profile = \"{p}\"\n"));

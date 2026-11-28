@@ -26,7 +26,8 @@ jobs:
       - run: cargo fmt --all --check
       # The desktop app has its own job: it needs the webview libraries.
       - run: cargo clippy --workspace --exclude tunwarden-desktop --all-targets -- -D warnings
-      - run: cargo test --workspace --exclude tunwarden-desktop
+      # --no-fail-fast: one failing test file must not hide the others.
+      - run: cargo test --workspace --exclude tunwarden-desktop --no-fail-fast
 
   desktop:
     name: desktop (${{ matrix.os }})

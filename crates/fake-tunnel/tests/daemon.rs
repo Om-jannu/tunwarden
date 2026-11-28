@@ -43,8 +43,8 @@ fn setup(extra_args: &str) -> Setup {
         &config,
         format!(
             "version = 1\n\
-             [[tunnels]]\nname = \"a\"\ngroups = [\"daily\"]\ncommand = \"'{FAKE}' --listen 127.0.0.1:{pa} {extra_args}\"\nforwards = [{{ local_port = {pa} }}]\n\
-             [[tunnels]]\nname = \"b\"\ncommand = \"'{FAKE}' --listen 127.0.0.1:{pb} {extra_args}\"\nforwards = [{{ local_port = {pb} }}]\n"
+             [[tunnels]]\nname = \"a\"\ngroups = [\"daily\"]\ncommand = ''''{FAKE}' --listen 127.0.0.1:{pa} {extra_args}'''\nforwards = [{{ local_port = {pa} }}]\n\
+             [[tunnels]]\nname = \"b\"\ncommand = ''''{FAKE}' --listen 127.0.0.1:{pb} {extra_args}'''\nforwards = [{{ local_port = {pb} }}]\n"
         ),
     )
     .unwrap();

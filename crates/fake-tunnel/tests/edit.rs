@@ -276,14 +276,14 @@ fn hand_edits_are_picked_up_while_the_daemon_runs() {
     let _turn = PORTS.lock().unwrap_or_else(|e| e.into_inner());
     let (p1, p2) = (free_port(), free_port());
     let env = Env::new(&format!(
-        "{HEADER}\n# the main database\n[[tunnels]]\nname = \"db\"\ncommand = \"{}\"\nforwards = [{{ local_port = {p1} }}]\n",
+        "{HEADER}\n# the main database\n[[tunnels]]\nname = \"db\"\ncommand = '''{}'''\nforwards = [{{ local_port = {p1} }}]\n",
         fake(p1)
     ));
     env.ok(&["start", "db"]);
 
     // A tunnel added by hand appears, stopped; the running one is untouched.
     let hand = format!(
-        "\n# added by hand\n[[tunnels]]\nname = \"api\"\ncommand = \"{}\"\nforwards = [{{ local_port = {p2} }}]\n",
+        "\n# added by hand\n[[tunnels]]\nname = \"api\"\ncommand = '''{}'''\nforwards = [{{ local_port = {p2} }}]\n",
         fake(p2)
     );
     env.write(&(env.text() + &hand));
@@ -344,7 +344,7 @@ fn hand_edits_are_picked_up_while_the_daemon_runs() {
     // Removing a running tunnel by hand stops it.
     let without_db = env.text().replace(
         &format!(
-            "[[tunnels]]\nname = \"db\"\ncommand = \"{}\"\nforwards = [{{ local_port = {p1} }}]\n",
+            "[[tunnels]]\nname = \"db\"\ncommand = '''{}'''\nforwards = [{{ local_port = {p1} }}]\n",
             fake(p1)
         ),
         "",

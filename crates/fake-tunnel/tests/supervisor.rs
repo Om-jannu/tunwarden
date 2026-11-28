@@ -85,7 +85,7 @@ fn load(tunnels: &str) -> Config {
 
 /// A command tunnel running fake-tunnel with `args`, optionally listening on `port`.
 fn tunnel(name: &str, args: &str, port: Option<u16>, profile: bool) -> String {
-    let mut t = format!("[[tunnels]]\nname = \"{name}\"\ncommand = \"'{FAKE}' {args}\"\n");
+    let mut t = format!("[[tunnels]]\nname = \"{name}\"\ncommand = ''''{FAKE}' {args}'''\n");
     if let Some(port) = port {
         t.push_str(&format!("forwards = [{{ local_port = {port} }}]\n"));
     }
@@ -381,8 +381,8 @@ async fn two_profiles_get_their_own_environment() {
     let src = format!(
         "version = 1\n[[profiles]]\nname = \"a\"\nenv = {{ TOOL_PROJECT = \"example-a-1\" }}\n\
          [[profiles]]\nname = \"b\"\nenv = {{ TOOL_PROJECT = \"example-b-2\", TOOL_ACCOUNT = \"b@example.com\" }}\n\
-         [[tunnels]]\nname = \"ta\"\nprofile = \"a\"\ncommand = \"'{FAKE}' --print-env TOOL_PROJECT --print-env TOOL_ACCOUNT\"\n\
-         [[tunnels]]\nname = \"tb\"\nprofile = \"b\"\ncommand = \"'{FAKE}' --print-env TOOL_PROJECT --print-env TOOL_ACCOUNT\"\n"
+         [[tunnels]]\nname = \"ta\"\nprofile = \"a\"\ncommand = ''''{FAKE}' --print-env TOOL_PROJECT --print-env TOOL_ACCOUNT'''\n\
+         [[tunnels]]\nname = \"tb\"\nprofile = \"b\"\ncommand = ''''{FAKE}' --print-env TOOL_PROJECT --print-env TOOL_ACCOUNT'''\n"
     );
     let c = config::parse(&src, Path::new("t.toml"), &SystemEnv).unwrap();
     let (a, ra) = start(spec(&c, 0));

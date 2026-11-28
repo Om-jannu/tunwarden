@@ -35,7 +35,7 @@ async fn logs_activity_and_state_are_written() {
         .port();
     let src = format!(
         "version = 1\n[[tunnels]]\nname = \"db\"\n\
-         command = \"'{FAKE}' --listen 127.0.0.1:{port} --print-stdout 'hello from stdout' --print 'hello from stderr'\"\n\
+         command = ''''{FAKE}' --listen 127.0.0.1:{port} --print-stdout 'hello from stdout' --print 'hello from stderr''''\n\
          forwards = [{{ local_port = {port} }}]\n"
     );
     let c = config::parse(&src, Path::new("t.toml"), &SystemEnv).unwrap();
@@ -115,7 +115,7 @@ async fn a_failure_reason_reaches_activity_and_state() {
     let squatter = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = squatter.local_addr().unwrap().port();
     let src = format!(
-        "version = 1\n[[tunnels]]\nname = \"db\"\ncommand = \"'{FAKE}' --listen 127.0.0.1:{port}\"\nforwards = [{{ local_port = {port} }}]\n"
+        "version = 1\n[[tunnels]]\nname = \"db\"\ncommand = ''''{FAKE}' --listen 127.0.0.1:{port}'''\nforwards = [{{ local_port = {port} }}]\n"
     );
     let c = config::parse(&src, Path::new("t.toml"), &SystemEnv).unwrap();
     let (store, _) = StateStore::open(state_dir.path()).unwrap();
